@@ -9,7 +9,7 @@
 DATA_TABLE: "https://docs.google.com/spreadsheets/d/1xmsstJGBo45SEQgCPncE76u51_VN5IDG9sFFafYkGfI/edit?usp=sharing"
 
 # Path where a folder named GEP2_results will be created
-OUT_FOLDER: "/scratch/maxim95/bachelor/gep2_test_results/run01/"
+OUT_FOLDER: "/scratch/maxim95/bachelor/gep2_test_results/run03/"
 
 # Per job max resources
 myCPU: 24      # Maximum cores per job (2-24)
@@ -36,7 +36,7 @@ FAST_TEMP_DIR: "auto"
 RUN_COMPL: on
 
 # Use BUSCO instead COMPLEASM 
-PREFER_BUSCO: off # under development
+PREFER_BUSCO: on # under development
 
 
 # Read processing ---------------------------------------------------------------------------------
