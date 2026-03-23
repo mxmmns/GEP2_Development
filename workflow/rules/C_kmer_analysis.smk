@@ -2,6 +2,12 @@
 # GEP2 - K-mer Analysis Rules
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Rule order to resolve ambiguity between Meryl and FastK rules
+if USE_FASTK:
+    ruleorder: C00_convert_fastk_to_meryl > C00_merge_assembly_kmer_db
+else:
+    ruleorder: C00_merge_assembly_kmer_db > C00_convert_fastk_to_meryl
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # INPUT FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
