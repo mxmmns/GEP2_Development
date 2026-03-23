@@ -310,9 +310,13 @@ missing = [k for k in required_keys if k not in config]
 if missing:
     raise ValueError(f"Missing required config keys: {missing}")
 
-# ----- BUSCO-SWITCH -----:
+# ----- BUSCO-SWITCH: -----
 RUN_COMPL = _as_bool(config.get("RUN_COMPL", True))
 PREFER_BUSCO = _as_bool(config.get("PREFER_BUSCO", False))
+
+# ----- FASTK-SWITCH: -----
+KMER_STATS = _as_bool(config.get("KMER_STATS", True))
+USE_FASTK = _as_bool(config.get("USE_FASTK", False))
 
 # Set up output folder
 out_folder = Path(config["OUT_FOLDER"]) / "GEP2_results"
@@ -1780,6 +1784,7 @@ def get_asm_stats_results():
                             os.path.join(base_path, "compleasm", asm_basename, f"{asm_basename}_summary.txt"),
                             os.path.join(base_path, "compleasm", asm_basename, f"{asm_basename}_results.tar.gz")
                         ])
+
     
     return expected_files
 
@@ -1855,6 +1860,8 @@ def get_kmer_stats_results():
     
     # Track which per-read k-mer DBs we need (deduplicated)
     per_read_dbs = {}  # (species, read_type, base) -> kmer_len
+
+    use_fastk = USE_FASTK
     
     for species, species_data in samples_config["sp_name"].items():
         if not species_data or "asm_id" not in species_data:
@@ -1902,11 +1909,12 @@ def get_kmer_stats_results():
                 if key not in per_read_dbs:
                     per_read_dbs[key] = kmer_len
             
-            # Assembly-specific k-mer DB and histogram
+            # Assembly-level paths
             asm_kmer_dir = os.path.join(
                 config["OUT_FOLDER"], "GEP2_results", species, asm_id, f"k{kmer_len}"
             )
             
+            # ".meryl" always required for Merqury, ".hist" always created (no matter the tool)
             expected_files.extend([
                 os.path.join(asm_kmer_dir, f"{asm_id}.meryl"),
                 os.path.join(asm_kmer_dir, f"{asm_id}.hist")
@@ -1922,7 +1930,8 @@ def get_kmer_stats_results():
             ])
             
             if IS_MAIN:
-                _debug_print(f"[GEP2] K-mer analysis for {species}/{asm_id}: using {read_type} reads (k={kmer_len})")
+                tool_string = "FastK + Meryl" if use_fastk else "Meryl"
+                print(f"[GEP2] K-mer analysis for {species}/{asm_id}: using {read_type} reads (k={kmer_len}, tool={tool_string})")
             
             # Merqury outputs
             asm_count = len([v for v in asm_files.values() if v and v != "None"])
@@ -1942,10 +1951,18 @@ def get_kmer_stats_results():
     
     # Add per-read k-mer DB outputs (deduplicated)
     for (species, read_type, base), kmer_len in per_read_dbs.items():
-        db_path = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "data", species,
-            "reads", read_type, f"kmer_db_k{kmer_len}", f"{base}.meryl"
-        )
+
+        if use_fastk:
+            db_path = os.path.join(
+                config["OUT_FOLDER"], "GEP2_results", "data", species,
+                "reads", read_type, f"fastk_k{kmer_len}", f"{base}.kdb"
+            )
+        else:
+            db_path = os.path.join(
+                config["OUT_FOLDER"], "GEP2_results", "data", species,
+                "reads", read_type, f"kmer_db_k{kmer_len}", f"{base}.meryl"
+            )
+
         expected_files.append(db_path)
     
     return expected_files
@@ -2427,4 +2444,4 @@ include: "rules/Z_reporting.smk"
 
 rule all:
     input:
-        get_asm_stats_results()
+        get_kmer_stats_results()

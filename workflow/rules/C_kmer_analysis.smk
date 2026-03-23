@@ -97,7 +97,8 @@ def get_per_read_kmer_input(wildcards):
 
 
 def get_assembly_kmer_db_inputs(wildcards):
-    """Get the per-read k-mer DBs needed for an assembly."""
+    """Get the per-read k-mer DBs needed for an assembly (Meryl / FastK)."""
+
     # Check if k-mer analysis should be skipped for this assembly
     if _should_skip_analysis(wildcards.species, wildcards.asm_id, "kmer"):
         return []
@@ -109,11 +110,18 @@ def get_assembly_kmer_db_inputs(wildcards):
     kmer_len = get_kmer_length(priority_rt) if priority_rt else 31
     
     inputs = []
+
     for r in reads:
-        db_path = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "data", wildcards.species,
-            "reads", r["read_type"], f"kmer_db_k{kmer_len}", f"{r['base']}.meryl"
-        )
+        if USE_FASTK:
+            db_path = os.path.join(
+                config["OUT_FOLDER"], "GEP2_results", "data", wildcards.species,
+                "reads", r["read_type"], f"fastk_k{kmer_len}", f"{r['base']}.kdb"
+            )
+        else:
+            db_path = os.path.join(
+                config["OUT_FOLDER"], "GEP2_results", "data", wildcards.species,
+                "reads", r["read_type"], f"kmer_db_k{kmer_len}", f"{r['base']}.meryl"
+            )
         inputs.append(db_path)
     
     return inputs
@@ -204,6 +212,52 @@ rule C00_build_per_read_kmer_db:
         echo "[GEP2] ✅ K-mer database complete: {output.meryl_db}"
         """
 
+# new fastk-Rule:
+rule C00_build_per_read_fastk_db:
+    """Build FastK database for a single read file."""
+    input:
+        reads = get_per_read_kmer_input
+    output:
+        kdb = directory(os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
+            "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.kdb"
+        ))
+    wildcard_constraints:
+        kmer_len = r"\d+",
+        base = r"[^/]+"
+    threads: cpu_func("kmer_count")
+    resources:
+        mem_mb = mem_func("kmer_count"),
+        runtime = time_func("kmer_count")
+    container: CONTAINERS["fastk"]
+    log:
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
+            "reads", "{read_type}", "logs", "C00_fastk_k{kmer_len}_{base}.log"
+        )
+    shell:
+        """
+        set -euo pipefail
+        exec > {log} 2>&1
+
+        mkdir -p $(dirname {output.kdb})
+
+        TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_fastk_{wildcards.species}_{wildcards.base}_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+        cd $TEMP_DIR
+
+        FastK -k{wildcards.kmer_len} \
+              -T{threads} \
+              -Ntemp \
+              -M16 \
+              {input.reads}
+
+        mv temp.kdb {output.kdb}
+
+        echo "[GEP2] FastK DB created"
+       """
+    
+
 
 # -------------------------------------------------------------------------------
 # RULES - Assembly-Specific K-mer Database (merge or symlink)
@@ -276,7 +330,115 @@ rule C00_merge_assembly_kmer_db:
         echo "[GEP2] Assembly k-mer database complete"
         """
 
+rule C00_merge_fastk_db:
+    """Merge FastK databases for an assembly."""
+    input:
+        dbs = get_assembly_kmer_db_inputs
+    output:
+        kdb = directory(os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.kdb"
+        ))
+    wildcard_constraints:
+        kmer_len = r"\d+"
+    threads: cpu_func("kmer_count")
+    resources:
+        mem_mb = mem_func("kmer_count"),
+        runtime = time_func("kmer_count")
+    container: CONTAINERS["fastk"]
+    log:
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "logs", "C00_fastk_merge_k{kmer_len}.log"
+        )
+    shell:
+        """
+        set -euo pipefail
+        exec > {log} 2>&1
 
+        mkdir -p $(dirname {output.kdb})
+
+        FastK -T{threads} -N{wildcards.asm_id} {input.dbs}
+
+        echo "[GEP2] FastK merge complete"
+        """
+    
+rule C00_fastk_histogram:
+    """Generate histogram from FastK database."""
+    input:
+        kdb = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.kdb"
+        )
+    output:
+        hist = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.hist"
+        )
+    resources:
+        mem_mb = mem_func("kmer_count"),
+        runtime = time_func("kmer_count")
+    container: CONTAINERS["fastk"]
+    log:
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "logs", "C00_fastk_hist_k{kmer_len}.log"
+        )
+    shell:
+        """
+        set -euo pipefail
+        exec > {log} 2>&1
+
+        Histex {input.kdb} > {output.hist}
+
+        echo "[GEP2] FastK Histogram generated"
+        """
+
+
+rule C00_convert_fastk_to_meryl:
+    """Convert FastK database to Meryl format for compatibility with Merqury."""
+    input:
+        kdb = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.kdb"
+        )
+    output:
+        meryl_db = directory(os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.meryl"
+        ))
+    wildcard_constraints:
+        kmer_len = r"\d+"
+    threads: cpu_func("kmer_count")
+    resources:
+        mem_mb = mem_func("kmer_count"),
+        runtime = time_func("kmer_count")
+    container: CONTAINERS["gep2_base"]
+    log:
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "logs", "C00_convert_fastk_to_meryl_k{kmer_len}.log"
+        )
+    shell:
+        """
+        set -euo pipefail
+        exec > {log} 2>&1
+        
+        echo "[GEP2] Converting FastK DB to Meryl format for {wildcards.species}/{wildcards.asm_id}"
+        echo "[GEP2] Input FastK DB: {input.kdb}"
+        echo "[GEP2] Output Meryl DB: {output.meryl_db}"
+        
+        mkdir -p $(dirname {output.meryl_db})
+        
+        TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_convert_{wildcards.species}_{wildcards.asm_id}_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+        cd $TEMP_DIR
+        
+        # Convert FastK to Meryl using meryl import
+        meryl import fastk {input.kdb} output {output.meryl_db}
+        
+        echo "[GEP2] ✅ Conversion complete: {output.meryl_db}"
+        """
 
 # -------------------------------------------------------------------------------
 # RULES - GenomeScope2
