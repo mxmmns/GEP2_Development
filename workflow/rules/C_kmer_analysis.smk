@@ -5,8 +5,10 @@
 # Rule order to resolve ambiguity between Meryl and FastK rules
 if USE_FASTK:
     ruleorder: C00_convert_fastk_to_meryl > C00_merge_assembly_kmer_db
+    ruleorder: C00_fastk_histogram > C00_merge_assembly_kmer_db
 else:
     ruleorder: C00_merge_assembly_kmer_db > C00_convert_fastk_to_meryl
+    ruleorder: C00_merge_assembly_kmer_db > C00_fastk_histogram
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # INPUT FUNCTIONS
