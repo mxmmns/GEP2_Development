@@ -1549,11 +1549,18 @@ def get_kmer_stats_results():
                 config["OUT_FOLDER"], "GEP2_results", species, asm_id, f"k{kmer_len}"
             )
             
-            # ".meryl" always required for Merqury, ".hist" always created (no matter the tool)
-            expected_files.extend([
-                os.path.join(asm_kmer_dir, f"{asm_id}.meryl"),
+            # K-mer database: .meryl for Meryl, .kdb for FastK; .hist always created
+            if use_fastk:
+                expected_files.append(
+                    os.path.join(asm_kmer_dir, f"{asm_id}.kdb")
+                )
+            else:
+                expected_files.append(
+                    os.path.join(asm_kmer_dir, f"{asm_id}.meryl")
+                )
+            expected_files.append(
                 os.path.join(asm_kmer_dir, f"{asm_id}.hist")
-            ])
+            )
             
             # Assembly-specific GenomeScope2
             gs_dir = os.path.join(asm_kmer_dir, "genomescope2")
