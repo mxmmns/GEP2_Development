@@ -513,7 +513,7 @@ rule C02_run_merqury:
         set -euo pipefail
         exec > {log} 2>&1
         
-        echo "[GEP2] Running Merqury{'FK' if [ '{params.use_fastk}' = 'True' ] else ''} for {wildcards.species}/{wildcards.asm_id}"
+        echo "[GEP2] Running $TOOL for {wildcards.species}/{wildcards.asm_id}"
         echo "[GEP2] K-mer database: {input.kmer_db}"
         echo "[GEP2] Assembly count: {params.asm_count}"
         
