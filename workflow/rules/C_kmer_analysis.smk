@@ -255,22 +255,36 @@ rule C00_build_per_read_fastk_db:
         set -euo pipefail
         exec > {log} 2>&1
 
+        echo "[GEP2] Building FastK database for {wildcards.base}"
+        echo "[GEP2] K-mer length: {wildcards.kmer_len}"
+        echo "[GEP2] Input: {input.reads}"
+        echo "[GEP2] Output directory: $(dirname {output.kdb})"
+
         mkdir -p $(dirname {output.kdb})
 
         TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_fastk_{wildcards.species}_{wildcards.base}_XXXXXX")"
         trap 'rm -rf "$TEMP_DIR"' EXIT
         cd $TEMP_DIR
 
-        FastK -k{wildcards.kmer_len} \
-              -T{threads} \
-              -Ntemp \
-              -M16 \
-              {input.reads}
+        echo "[GEP2] FastK temp directory: $TEMP_DIR"
+        echo "[GEP2] Running: FastK -k{wildcards.kmer_len} -T{threads} -Ntemp -M16 {input.reads}"
+
+        FastK -k{wildcards.kmer_len} -T{threads} -Ntemp -M16 {input.reads}
+
+        echo "[GEP2] FastK completed. Generated files:"
+        ls -lah $TEMP_DIR/temp* 2>/dev/null || echo "No temp* files found"
+        ls -lah $TEMP_DIR/*.kdb 2>/dev/null || echo "No .kdb files found"
+
+        if [ ! -d "temp.kdb" ]; then
+            echo "[GEP2] ERROR: temp.kdb directory not created!"
+            echo "[GEP2] TEMP_DIR contents:"
+            ls -la $TEMP_DIR/
+            exit 1
+        fi
 
         mv temp.kdb {output.kdb}
-
-        echo "[GEP2] FastK DB created"
-       """
+        echo "[GEP2] ✅ FastK DB created: {output.kdb}"
+        """
     
 
 
