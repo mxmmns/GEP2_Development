@@ -267,21 +267,29 @@ rule C00_build_per_read_fastk_db:
         cd $TEMP_DIR
 
         echo "[GEP2] FastK temp directory: $TEMP_DIR"
-        echo "[GEP2] Running: FastK -k{wildcards.kmer_len} -T{threads} -Ntemp -M16 {input.reads}"
+        echo "[GEP2] Input basename: $(basename {input.reads})"
+        echo "[GEP2] Running: FastK -k{wildcards.kmer_len} -T{threads} {input.reads}"
 
-        FastK -k{wildcards.kmer_len} -T{threads} -Ntemp -M16 {input.reads}
+        # Run FastK (generates .kdb with input-based prefix)
+        FastK -k{wildcards.kmer_len} -T{threads} {input.reads}
 
         echo "[GEP2] FastK completed. Generated files:"
-        ls -lah $TEMP_DIR/temp* 2>/dev/null || echo "No temp* files found"
-        ls -lah $TEMP_DIR/*.kdb 2>/dev/null || echo "No .kdb files found"
+        ls -lah $TEMP_DIR/*.kdb 2>/dev/null || echo "No .kdb directories found"
+        ls -lah $TEMP_DIR/*.hist 2>/dev/null || echo "No .hist files found"
 
-        if [ ! -d "temp.kdb" ]; then
-            echo "[GEP2] ERROR: temp.kdb directory not created!"
+        # Find the generated .kdb directory and rename it to temp.kdb
+        GENERATED_KDB=$(ls -d *.kdb 2>/dev/null | head -1)
+        if [ -z "$GENERATED_KDB" ]; then
+            echo "[GEP2] ERROR: No .kdb directory created!"
             echo "[GEP2] TEMP_DIR contents:"
             ls -la $TEMP_DIR/
             exit 1
         fi
 
+        echo "[GEP2] Found generated .kdb: $GENERATED_KDB"
+        mv "$GENERATED_KDB" temp.kdb
+        
+        echo "[GEP2] Moving temp.kdb to final location: {output.kdb}"
         mv temp.kdb {output.kdb}
         echo "[GEP2] ✅ FastK DB created: {output.kdb}"
         """
