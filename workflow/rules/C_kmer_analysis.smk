@@ -268,20 +268,42 @@ rule C00_build_per_read_fastk_db:
 
         echo "[GEP2] FastK temp directory: $TEMP_DIR"
         echo "[GEP2] Input basename: $(basename {input.reads})"
+        echo "[GEP2] Input file size: $(stat --printf='%s' {input.reads} 2>/dev/null || echo 'UNKNOWN')"
+        echo "[GEP2] Input file readable: $([ -r {input.reads} ] && echo 'YES' || echo 'NO')"
         echo "[GEP2] Running: FastK -k{wildcards.kmer_len} -T{threads} {input.reads}"
+        
+        # Check if FastK is available
+        which FastK >/dev/null 2>&1 || {{ echo "[GEP2] ERROR: FastK not found in PATH"; exit 1; }}
+        echo "[GEP2] FastK path: $(which FastK)"
 
         # Run FastK (generates .kdb with input-based prefix)
-        FastK -k{wildcards.kmer_len} -T{threads} {input.reads}
+        # Capture all output including stderr
+        if FastK -k{wildcards.kmer_len} -T{threads} {input.reads} 2>&1 | tee fastk_output.txt; then
+            echo "[GEP2] FastK command completed successfully"
+        else
+            echo "[GEP2] ERROR: FastK command failed with exit code $?"
+            echo "[GEP2] FastK output:"
+            cat fastk_output.txt || echo "No output captured"
+            ls -la $TEMP_DIR/
+            exit 1
+        fi
 
-        echo "[GEP2] FastK completed. Generated files:"
+        echo "[GEP2] FastK completed. Generated files in $TEMP_DIR:"
+        ls -lah $TEMP_DIR/ | head -30
+
+        echo "[GEP2] Looking for .kdb directories:"
         ls -lah $TEMP_DIR/*.kdb 2>/dev/null || echo "No .kdb directories found"
+        
+        echo "[GEP2] Looking for .hist files:"
         ls -lah $TEMP_DIR/*.hist 2>/dev/null || echo "No .hist files found"
 
         # Find the generated .kdb directory and rename it to temp.kdb
         GENERATED_KDB=$(ls -d *.kdb 2>/dev/null | head -1)
         if [ -z "$GENERATED_KDB" ]; then
-            echo "[GEP2] ERROR: No .kdb directory created!"
-            echo "[GEP2] TEMP_DIR contents:"
+            echo "[GEP2] ERROR: No .kdb directory created by FastK!"
+            echo "[GEP2] FastK output was:"
+            cat fastk_output.txt || echo "No output captured"
+            echo "[GEP2] Full TEMP_DIR contents:"
             ls -la $TEMP_DIR/
             exit 1
         fi
@@ -468,7 +490,7 @@ rule C01_run_genomescope2:
     resources:
         mem_mb = mem_func("genomescope"),
         runtime = time_func("genomescope")
-    container: CONTAINERS["gep2_base"]
+    container: CONTAINERS["fastk"] if USE_FASTK else CONTAINERS["gep2_base"]
     log:
         os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
@@ -479,19 +501,22 @@ rule C01_run_genomescope2:
         set -euo pipefail
         exec > {log} 2>&1
         
-        echo "[GEP2] Running GenomeScope2 for {wildcards.species}/{wildcards.asm_id}"
+        TOOL="GenomeScope2"
+        CMD="genomescope2 -i {input.hist} -o {params.outdir} -k {wildcards.kmer_len} -p {params.ploidy} -n {wildcards.asm_id}"
+        if [ "{USE_FASTK}" = "True" ]; then
+            TOOL="GenomeScopeFK"
+            CMD="genomescopefk -i {input.hist} -o {params.outdir} -k {wildcards.kmer_len} -p {params.ploidy} -n {wildcards.asm_id}"
+        fi
+
+        echo "[GEP2] Running $TOOL for {wildcards.species}/{wildcards.asm_id}"
         echo "[GEP2] K-mer length: {wildcards.kmer_len}"
-        echo "[GEP2] Ploidy: {params.ploidy}"
-        
+        echo "[GEP2] Command: $CMD"
+
         mkdir -p {params.outdir}
-        
-        genomescope2 -i {input.hist} \\
-                     -o {params.outdir} \\
-                     -k {wildcards.kmer_len} \\
-                     -p {params.ploidy} \\
-                     -n {wildcards.asm_id}
-        
-        echo "[GEP2] GenomeScope2 complete"
+
+        eval $CMD
+
+        echo "[GEP2] ✅ $TOOL complete"
         """
 
 
