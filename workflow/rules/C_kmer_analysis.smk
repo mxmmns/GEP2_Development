@@ -270,7 +270,7 @@ rule C00_build_per_read_fastk_db:
         echo "[GEP2] Input basename: $(basename {input.reads})"
         echo "[GEP2] Input file size: $(stat --printf='%s' {input.reads} 2>/dev/null || echo 'UNKNOWN')"
         echo "[GEP2] Input file readable: $([ -r {input.reads} ] && echo 'YES' || echo 'NO')"
-        echo "[GEP2] Running: FastK -k{wildcards.kmer_len} -T{threads} {input.reads}"
+        echo "[GEP2] Running: FastK -k{wildcards.kmer_len} -T{threads} -t {input.reads}"
         
         # Check if FastK is available
         FASTK_PATH=$(which FastK 2>/dev/null || find /usr/local/bin /usr/bin /opt /bin -name "FastK" 2>/dev/null | head -1)
@@ -284,9 +284,18 @@ rule C00_build_per_read_fastk_db:
         fi
         echo "[GEP2] FastK path: $FASTK_PATH"
 
+        # Handle compressed input
+        if [[ "{input.reads}" == *.gz ]]; then
+            echo "[GEP2] Decompressing input file..."
+            zcat "{input.reads}" > input.fq
+            INPUT_FILE=input.fq
+        else
+            INPUT_FILE="{input.reads}"
+        fi
+
         # Run FastK (generates .ktab with -t option)
         # Capture all output including stderr
-        if FastK -k{wildcards.kmer_len} -T{threads} -t {input.reads} 2>&1 | tee fastk_output.txt; then
+        if FastK -v -k{wildcards.kmer_len} -T{threads} -t {input.reads} 2>&1 | tee fastk_output.txt; then
             echo "[GEP2] FastK command completed successfully"
         else
             echo "[GEP2] ERROR: FastK command failed with exit code $?"
