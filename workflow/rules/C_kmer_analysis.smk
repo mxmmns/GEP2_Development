@@ -121,7 +121,7 @@ def get_assembly_kmer_db_inputs(wildcards):
         if USE_FASTK:
             db_path = os.path.join(
                 config["OUT_FOLDER"], "GEP2_results", "data", wildcards.species,
-                "reads", r["read_type"], f"fastk_k{kmer_len}", f"{r['base']}.kdb"
+                "reads", r["read_type"], f"fastk_k{kmer_len}", f"{r['base']}.ktab"
             )
         else:
             db_path = os.path.join(
@@ -148,7 +148,7 @@ def get_merqury_db_input(wildcards):
         # Use FastK database for MerquryFK
         return os.path.join(
             config["OUT_FOLDER"], "GEP2_results", wildcards.species,
-            wildcards.asm_id, f"k{kmer_len}", f"{wildcards.asm_id}.kdb"
+            wildcards.asm_id, f"k{kmer_len}", f"{wildcards.asm_id}.ktab"
         )
     else:
         # Use Meryl database for Merqury
@@ -229,13 +229,13 @@ rule C00_build_per_read_kmer_db:
 
 # new fastk-Rule:
 rule C00_build_per_read_fastk_db:
-    """Build FastK database for a single read file."""
+    """Build FastK k-mer table for a single read file."""
     input:
         reads = get_per_read_kmer_input
     output:
-        kdb = directory(os.path.join(
+        ktab = directory(os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
-            "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.kdb"
+            "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.ktab"
         ))
     wildcard_constraints:
         kmer_len = r"\d+",
@@ -258,9 +258,9 @@ rule C00_build_per_read_fastk_db:
         echo "[GEP2] Building FastK database for {wildcards.base}"
         echo "[GEP2] K-mer length: {wildcards.kmer_len}"
         echo "[GEP2] Input: {input.reads}"
-        echo "[GEP2] Output directory: $(dirname {output.kdb})"
+        echo "[GEP2] Output directory: $(dirname {output.ktab})"
 
-        mkdir -p $(dirname {output.kdb})
+        mkdir -p $(dirname {output.ktab})
 
         TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_fastk_{wildcards.species}_{wildcards.base}_XXXXXX")"
         trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -273,12 +273,20 @@ rule C00_build_per_read_fastk_db:
         echo "[GEP2] Running: FastK -k{wildcards.kmer_len} -T{threads} {input.reads}"
         
         # Check if FastK is available
-        which FastK >/dev/null 2>&1 || {{ echo "[GEP2] ERROR: FastK not found in PATH"; exit 1; }}
-        echo "[GEP2] FastK path: $(which FastK)"
+        FASTK_PATH=$(which FastK 2>/dev/null || find /usr/local/bin /usr/bin /opt /bin -name "FastK" 2>/dev/null | head -1)
+        if [ -z "$FASTK_PATH" ]; then
+            echo "[GEP2] ERROR: FastK not found in PATH or common locations"
+            echo "[GEP2] Checking container contents..."
+            ls -la /usr/local/bin/ | grep -i fastk || echo "No FastK in /usr/local/bin"
+            ls -la /usr/bin/ | grep -i fastk || echo "No FastK in /usr/bin"
+            ls -la /opt/ | grep -i fastk || echo "No FastK in /opt"
+            exit 1
+        fi
+        echo "[GEP2] FastK path: $FASTK_PATH"
 
-        # Run FastK (generates .kdb with input-based prefix)
+        # Run FastK (generates .ktab with -t option)
         # Capture all output including stderr
-        if FastK -k{wildcards.kmer_len} -T{threads} {input.reads} 2>&1 | tee fastk_output.txt; then
+        if FastK -k{wildcards.kmer_len} -T{threads} -t {input.reads} 2>&1 | tee fastk_output.txt; then
             echo "[GEP2] FastK command completed successfully"
         else
             echo "[GEP2] ERROR: FastK command failed with exit code $?"
@@ -291,16 +299,16 @@ rule C00_build_per_read_fastk_db:
         echo "[GEP2] FastK completed. Generated files in $TEMP_DIR:"
         ls -lah $TEMP_DIR/ | head -30
 
-        echo "[GEP2] Looking for .kdb directories:"
-        ls -lah $TEMP_DIR/*.kdb 2>/dev/null || echo "No .kdb directories found"
+        echo "[GEP2] Looking for .ktab directories:"
+        ls -lah $TEMP_DIR/*.ktab 2>/dev/null || echo "No .ktab directories found"
         
         echo "[GEP2] Looking for .hist files:"
         ls -lah $TEMP_DIR/*.hist 2>/dev/null || echo "No .hist files found"
 
-        # Find the generated .kdb directory and rename it to temp.kdb
-        GENERATED_KDB=$(ls -d *.kdb 2>/dev/null | head -1)
-        if [ -z "$GENERATED_KDB" ]; then
-            echo "[GEP2] ERROR: No .kdb directory created by FastK!"
+        # Find the generated .ktab directory and rename it to temp.ktab
+        GENERATED_KTAB=$(ls -d *.ktab 2>/dev/null | head -1)
+        if [ -z "$GENERATED_KTAB" ]; then
+            echo "[GEP2] ERROR: No .ktab directory created by FastK!"
             echo "[GEP2] FastK output was:"
             cat fastk_output.txt || echo "No output captured"
             echo "[GEP2] Full TEMP_DIR contents:"
@@ -308,12 +316,12 @@ rule C00_build_per_read_fastk_db:
             exit 1
         fi
 
-        echo "[GEP2] Found generated .kdb: $GENERATED_KDB"
-        mv "$GENERATED_KDB" temp.kdb
+        echo "[GEP2] Found generated .ktab: $GENERATED_KTAB"
+        mv "$GENERATED_KTAB" temp.ktab
         
-        echo "[GEP2] Moving temp.kdb to final location: {output.kdb}"
-        mv temp.kdb {output.kdb}
-        echo "[GEP2] ✅ FastK DB created: {output.kdb}"
+        echo "[GEP2] Moving temp.ktab to final location: {output.ktab}"
+        mv temp.ktab {output.ktab}
+        echo "[GEP2] ✅ FastK KTAB created: {output.ktab}"
         """
     
 
@@ -390,13 +398,13 @@ rule C00_merge_assembly_kmer_db:
         """
 
 rule C00_merge_fastk_db:
-    """Merge FastK databases for an assembly."""
+    """Merge FastK k-mer tables for an assembly."""
     input:
-        dbs = get_assembly_kmer_db_inputs
+        ktabs = get_assembly_kmer_db_inputs
     output:
-        kdb = directory(os.path.join(
+        ktab = directory(os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.kdb"
+            "k{kmer_len}", "{asm_id}.ktab"
         ))
     wildcard_constraints:
         kmer_len = r"\d+"
@@ -415,19 +423,19 @@ rule C00_merge_fastk_db:
         set -euo pipefail
         exec > {log} 2>&1
 
-        mkdir -p $(dirname {output.kdb})
+        mkdir -p $(dirname {output.ktab})
 
-        FastK -T{threads} -N{wildcards.asm_id} {input.dbs}
+        Fastmerge -t -N{wildcards.asm_id} {input.ktabs}
 
         echo "[GEP2] FastK merge complete"
         """
     
 rule C00_fastk_histogram:
-    """Generate histogram from FastK database."""
+    """Generate histogram from FastK k-mer table."""
     input:
-        kdb = os.path.join(
+        ktab = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.kdb"
+            "k{kmer_len}", "{asm_id}.ktab"
         )
     output:
         hist = os.path.join(
@@ -448,7 +456,7 @@ rule C00_fastk_histogram:
         set -euo pipefail
         exec > {log} 2>&1
 
-        Histex {input.kdb} > {output.hist}
+        Histex {input.ktab} > {output.hist}
 
         echo "[GEP2] FastK Histogram generated"
         """
@@ -576,9 +584,9 @@ rule C02_run_merqury:
         
         # Link k-mer database
         if [ '{params.use_fastk}' = 'True' ]; then
-            ln -sf {input.kmer_db} read_db.kdb
+            ln -sf {input.kmer_db} read_db.ktab
             TOOL="MerquryFK"
-            DB_ARG="read_db.kdb"
+            DB_ARG="read_db.ktab"
         else
             ln -sf {input.kmer_db} read_db.meryl
             export MERQURY=/opt/conda/share/merqury
