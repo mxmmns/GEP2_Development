@@ -229,13 +229,13 @@ rule C00_build_per_read_kmer_db:
 
 # new fastk-Rule:
 rule C00_build_per_read_fastk_db:
-    """Build FastK k-mer table for a single read file."""
+    """Build FastK k-mer database for a single read file."""
     input:
         reads = get_per_read_kmer_input
     output:
-        ktab = directory(os.path.join(
+        kdb = directory(os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
-            "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.ktab"
+            "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.kdb"
         ))
     wildcard_constraints:
         kmer_len = r"\d+",
@@ -257,32 +257,12 @@ rule C00_build_per_read_fastk_db:
 
         echo "[GEP2] Building FastK database for {wildcards.base}"
         echo "[GEP2] K-mer length: {wildcards.kmer_len}"
-        echo "[GEP2] Input: {input.reads}"
-        echo "[GEP2] Output directory: $(dirname {output.ktab})"
 
-        mkdir -p $(dirname {output.ktab})
+        mkdir -p $(dirname {output.kdb})
 
         TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_fastk_{wildcards.species}_{wildcards.base}_XXXXXX")"
         trap 'rm -rf "$TEMP_DIR"' EXIT
         cd $TEMP_DIR
-
-        echo "[GEP2] FastK temp directory: $TEMP_DIR"
-        echo "[GEP2] Input basename: $(basename {input.reads})"
-        echo "[GEP2] Input file size: $(stat --printf='%s' {input.reads} 2>/dev/null || echo 'UNKNOWN')"
-        echo "[GEP2] Input file readable: $([ -r {input.reads} ] && echo 'YES' || echo 'NO')"
-        echo "[GEP2] Running: FastK -k{wildcards.kmer_len} -T{threads} -t {input.reads}"
-        
-        # Check if FastK is available
-        FASTK_PATH=$(which FastK 2>/dev/null || find /usr/local/bin /usr/bin /opt /bin -name "FastK" 2>/dev/null | head -1)
-        if [ -z "$FASTK_PATH" ]; then
-            echo "[GEP2] ERROR: FastK not found in PATH or common locations"
-            echo "[GEP2] Checking container contents..."
-            ls -la /usr/local/bin/ | grep -i fastk || echo "No FastK in /usr/local/bin"
-            ls -la /usr/bin/ | grep -i fastk || echo "No FastK in /usr/bin"
-            ls -la /opt/ | grep -i fastk || echo "No FastK in /opt"
-            exit 1
-        fi
-        echo "[GEP2] FastK path: $FASTK_PATH"
 
         # Handle compressed input
         if [[ "{input.reads}" == *.gz ]]; then
@@ -293,44 +273,20 @@ rule C00_build_per_read_fastk_db:
             INPUT_FILE="{input.reads}"
         fi
 
-        # Run FastK (generates .ktab with -t option)
-        # Capture all output including stderr
-        if FastK -v -k{wildcards.kmer_len} -T{threads} -t {input.reads} 2>&1 | tee fastk_output.txt; then
-            echo "[GEP2] FastK command completed successfully"
-        else
-            echo "[GEP2] ERROR: FastK command failed with exit code $?"
-            echo "[GEP2] FastK output:"
-            cat fastk_output.txt || echo "No output captured"
-            ls -la $TEMP_DIR/
-            exit 1
-        fi
+        echo "[GEP2] Running FastK..."
+        FastK \
+            -k{wildcards.kmer_len} \
+            -T{threads} \
+            -N{wildcards.base} \
+            $INPUT_FILE
 
-        echo "[GEP2] FastK completed. Generated files in $TEMP_DIR:"
-        ls -lah $TEMP_DIR/ | head -30
+        echo "[GEP2] FastK finished. Moving output..."
 
-        echo "[GEP2] Looking for .ktab directories:"
-        ls -lah $TEMP_DIR/*.ktab 2>/dev/null || echo "No .ktab directories found"
-        
-        echo "[GEP2] Looking for .hist files:"
-        ls -lah $TEMP_DIR/*.hist 2>/dev/null || echo "No .hist files found"
+        # Move all FastK output files (.kdb, .idx, .tab)
+        mkdir -p {output.kdb}
+        mv {wildcards.base}.kdb* {output.kdb}/
 
-        # Find the generated .ktab directory and rename it to temp.ktab
-        GENERATED_KTAB=$(ls -d *.ktab 2>/dev/null | head -1)
-        if [ -z "$GENERATED_KTAB" ]; then
-            echo "[GEP2] ERROR: No .ktab directory created by FastK!"
-            echo "[GEP2] FastK output was:"
-            cat fastk_output.txt || echo "No output captured"
-            echo "[GEP2] Full TEMP_DIR contents:"
-            ls -la $TEMP_DIR/
-            exit 1
-        fi
-
-        echo "[GEP2] Found generated .ktab: $GENERATED_KTAB"
-        mv "$GENERATED_KTAB" temp.ktab
-        
-        echo "[GEP2] Moving temp.ktab to final location: {output.ktab}"
-        mv temp.ktab {output.ktab}
-        echo "[GEP2] ✅ FastK KTAB created: {output.ktab}"
+        echo "[GEP2] ✅ FastK database created: {output.kdb}"
         """
     
 
@@ -413,7 +369,7 @@ rule C00_merge_fastk_db:
     output:
         ktab = directory(os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.ktab"
+            "k{kmer_len}", "{asm_id}.kdb"
         ))
     wildcard_constraints:
         kmer_len = r"\d+"
@@ -444,7 +400,7 @@ rule C00_fastk_histogram:
     input:
         ktab = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.ktab"
+            "k{kmer_len}", "{asm_id}.kdb"
         )
     output:
         hist = os.path.join(
