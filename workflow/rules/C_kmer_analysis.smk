@@ -167,7 +167,7 @@ def get_assembly_kmer_db_inputs(wildcards):
         if USE_FASTK:
             db_path = os.path.join(
                 config["OUT_FOLDER"], "GEP2_results", "data", wildcards.species,
-                "reads", r["read_type"], f"fastk_k{kmer_len}", f"{r['base']}.ktab"
+                "reads", r["read_type"], f"fastk_k{kmer_len}", f"{r['base']}.kdb"
             )
         else:
             db_path = os.path.join(
@@ -194,7 +194,7 @@ def get_merqury_db_input(wildcards):
         # Use FastK database for MerquryFK
         return os.path.join(
             config["OUT_FOLDER"], "GEP2_results", wildcards.species,
-            wildcards.asm_id, f"k{kmer_len}", f"{wildcards.asm_id}.ktab"
+            wildcards.asm_id, f"k{kmer_len}", f"{wildcards.asm_id}.kdb"
         )
     else:
         # Use Meryl database for Merqury
