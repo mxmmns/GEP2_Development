@@ -231,10 +231,10 @@ rule C00_build_per_read_fastk_db:
     input:
         reads = get_per_read_kmer_input
     output:
-        ktab = directory(os.path.join(
+        ktab = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
             "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.ktab"
-        ))
+        )
     wildcard_constraints:
         kmer_len = r"\d+",
         base = r"[^/]+"
@@ -256,7 +256,8 @@ rule C00_build_per_read_fastk_db:
         echo "[GEP2] Building FastK database for {wildcards.base}"
         echo "[GEP2] K-mer length: {wildcards.kmer_len}"
 
-        mkdir -p $(dirname {output.ktab})
+        OUTDIR=$(dirname {output.ktab})
+        mkdir -p $OUTDIR
 
         TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_fastk_{wildcards.species}_{wildcards.base}_XXXXXX")"
         trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -280,8 +281,7 @@ rule C00_build_per_read_fastk_db:
             $INPUT_FILE
 
         echo "[GEP2] FastK finished. Moving output..."
-
-        mv $TEMP_DIR/{wildcards.base}.ktab {output.ktab} 
+        mv $TEMP_DIR/{wildcards.base}.* $OUTDIR/
 
         echo "[GEP2] ✅ FastK database created: {output.ktab}"
         """
