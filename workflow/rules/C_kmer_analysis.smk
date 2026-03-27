@@ -2,6 +2,11 @@
 # GEP2 - K-mer Analysis Rules
 # ═══════════════════════════════════════════════════════════════════════════════
 
+if USE_FASTK:
+    ruleorder: C00_merge_fastk_db > C00_merge_assembly_kmer_db
+else:
+    ruleorder: C00_merge_assembly_kmer_db > C00_merge_fastk_db
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # INPUT FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
