@@ -167,7 +167,7 @@ def get_assembly_kmer_db_inputs(wildcards):
         if USE_FASTK:
             db_path = os.path.join(
                 config["OUT_FOLDER"], "GEP2_results", "data", wildcards.species,
-                "reads", r["read_type"], f"fastk_k{kmer_len}", f"{r['base']}.kdb"
+                "reads", r["read_type"], f"fastk_k{kmer_len}", f"{r['base']}.ktab"
             )
         else:
             db_path = os.path.join(
@@ -194,7 +194,7 @@ def get_merqury_db_input(wildcards):
         # Use FastK database for MerquryFK
         return os.path.join(
             config["OUT_FOLDER"], "GEP2_results", wildcards.species,
-            wildcards.asm_id, f"k{kmer_len}", f"{wildcards.asm_id}.kdb"
+            wildcards.asm_id, f"k{kmer_len}", f"{wildcards.asm_id}.ktab"
         )
     else:
         # Use Meryl database for Merqury
@@ -271,15 +271,14 @@ rule C00_build_per_read_kmer_db:
         echo "[GEP2] ✅ K-mer database complete: {output.meryl_db}"
         """
 
-# new fastk-Rule:
 rule C00_build_per_read_fastk_db:
     """Build FastK k-mer database for a single read file."""
     input:
         reads = get_per_read_kmer_input
     output:
-        kdb = directory(os.path.join(
+        ktab = directory(os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
-            "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.kdb"
+            "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.ktab"
         ))
     wildcard_constraints:
         kmer_len = r"\d+",
@@ -302,17 +301,16 @@ rule C00_build_per_read_fastk_db:
         echo "[GEP2] Building FastK database for {wildcards.base}"
         echo "[GEP2] K-mer length: {wildcards.kmer_len}"
 
-        mkdir -p $(dirname {output.kdb})
+        mkdir -p $(dirname {output.ktab})
 
         TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_fastk_{wildcards.species}_{wildcards.base}_XXXXXX")"
         trap 'rm -rf "$TEMP_DIR"' EXIT
-        cd $TEMP_DIR
 
         # Handle compressed input
         if [[ "{input.reads}" == *.gz ]]; then
             echo "[GEP2] Decompressing input file..."
-            zcat "{input.reads}" > input.fq
-            INPUT_FILE=input.fq
+            zcat "{input.reads}" > $TEMP_DIR/input.fastq
+            INPUT_FILE=$TEMP_DIR/input.fastq
         else
             INPUT_FILE="{input.reads}"
         fi
@@ -321,16 +319,16 @@ rule C00_build_per_read_fastk_db:
         FastK \
             -k{wildcards.kmer_len} \
             -T{threads} \
-            -N{wildcards.base} \
+            -P$TEMP_DIR \
+            -N$TEMP_DIR/{wildcards.base} \
+            -t \
             $INPUT_FILE
 
         echo "[GEP2] FastK finished. Moving output..."
 
-        # Move all FastK output files (.kdb, .idx, .tab)
-        mkdir -p {output.kdb}
-        mv {wildcards.base}.kdb* {output.kdb}/
+        mv $TEMP_DIR/{wildcards.base}.ktab {output.ktab} 
 
-        echo "[GEP2] ✅ FastK database created: {output.kdb}"
+        echo "[GEP2] ✅ FastK database created: {output.ktab}"
         """
     
 
@@ -407,7 +405,11 @@ rule C00_merge_fastk_db:
     output:
         ktab = directory(os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.kdb"
+            "k{kmer_len}", "{asm_id}.ktab"
+        )),
+        hist = directory(os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.hist"
         ))
     wildcard_constraints:
         kmer_len = r"\d+"
@@ -428,42 +430,27 @@ rule C00_merge_fastk_db:
 
         mkdir -p $(dirname {output.ktab})
 
-        Fastmerge -t -N{wildcards.asm_id} {input.ktabs}
+        TEMP_DIR="$(mktemp -d "$GEP2_TMP/fastk_merge_{wildcards.asm_id}_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+        cd $TEMP_DIR
 
-        echo "[GEP2] FastK merge complete"
+        echo "[GEP2] Merging FastK tables:"
+        echo {input.ktabs}
+
+        Fastmerge \
+        -t \
+        -h \
+        -T{threads} \
+        -P$TEMP_DIR \
+        {wildcards.asm_id} \
+        {input.ktabs}
+
+        mv {wildcards.asm_id}.ktab {output.ktab}
+        mv {wildcards.asm_id}.hist {output.hist}
+
+        echo "[GEP2] FastK merge complete: {output.ktab}"
+        echo "[GEP2] FastK merged hist complete: {output.hist}"
         """
-    
-rule C00_fastk_histogram:
-    """Generate histogram from FastK k-mer table."""
-    input:
-        ktab = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.kdb"
-        )
-    output:
-        hist = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.hist"
-        )
-    resources:
-        mem_mb = mem_func("kmer_count"),
-        runtime = time_func("kmer_count")
-    container: CONTAINERS["fastk"]
-    log:
-        os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "logs", "C00_fastk_hist_k{kmer_len}.log"
-        )
-    shell:
-        """
-        set -euo pipefail
-        exec > {log} 2>&1
-
-        Histex {input.ktab} > {output.hist}
-
-        echo "[GEP2] FastK Histogram generated"
-        """
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RULES - GenomeScope2 (now at assembly level)
