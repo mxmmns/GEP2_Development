@@ -369,7 +369,10 @@ rule C00_merge_assembly_kmer_db:
 rule C00_merge_fastk_db:
     """Merge FastK k-mer tables for an assembly."""
     input:
-        roots = fastk_roots
+        roots = lambda wc: [
+            i.replace(".ktab", "")
+            for i in get_assembly_kmer_db_inputs(wc)
+        ]
     output:
         ktab = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
