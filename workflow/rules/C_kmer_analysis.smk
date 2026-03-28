@@ -217,6 +217,9 @@ def get_asm_count(wildcards):
     asm_files = get_assembly_files(wildcards.species, wildcards.asm_id)
     return len([v for v in asm_files.values() if v and v != "None"])
 
+def fastk_roots(inputs):
+    return [i.replace(".ktab", "") for i in inputs]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RULES - Per-Read K-mer Database Construction
@@ -325,7 +328,10 @@ rule C00_build_per_read_fastk_db:
             $INPUT_FILE
 
         echo "[GEP2] FastK finished. Moving output..."
-        mv $TEMP_DIR/{wildcards.base}.* $OUTDIR/
+        shopt -s dotglob
+        mv $TEMP_DIR/{wildcards.base}* $OUTDIR/ || true
+        mv $TEMP_DIR/.{wildcards.base}* $OUTDIR/ || true
+        shopt -u dotglob
 
         echo "[GEP2] ✅ FastK database created: {output.ktab}"
         """
@@ -400,16 +406,16 @@ rule C00_merge_assembly_kmer_db:
 rule C00_merge_fastk_db:
     """Merge FastK k-mer tables for an assembly."""
     input:
-        ktabs = get_assembly_kmer_db_inputs
+        roots = fastk_roots(get_assembly_kmer_db_inputs)
     output:
-        ktab = directory(os.path.join(
+        ktab = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
             "k{kmer_len}", "{asm_id}.ktab"
-        )),
-        hist = directory(os.path.join(
+        ),
+        hist = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
             "k{kmer_len}", "{asm_id}.hist"
-        ))
+        )
     wildcard_constraints:
         kmer_len = r"\d+"
     threads: cpu_func("kmer_count")
@@ -434,7 +440,7 @@ rule C00_merge_fastk_db:
         cd $TEMP_DIR
 
         echo "[GEP2] Merging FastK tables:"
-        echo {input.ktabs}
+        echo {input.roots}
 
         Fastmerge \
         -t \
@@ -442,7 +448,7 @@ rule C00_merge_fastk_db:
         -T{threads} \
         -P$TEMP_DIR \
         {wildcards.asm_id} \
-        {input.ktabs}
+        {input.roots}
 
         mv {wildcards.asm_id}.ktab {output.ktab}
         mv {wildcards.asm_id}.hist {output.hist}
