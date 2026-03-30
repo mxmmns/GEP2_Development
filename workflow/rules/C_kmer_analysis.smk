@@ -456,8 +456,12 @@ rule C00_merge_fastk_db:
         {wildcards.asm_id} \
         {input.roots}
 
-        echo "[GEP2] Contents of TEMP_DIR before Histex:"
+        echo "[DEBUG] TEMP_DIR contents:"
         ls -lah $TEMP_DIR
+        echo "[DEBUG] GEP2_TMP contents:"
+        ls -lah $GEP2_TMP | head -20
+        echo "[DEBUG] PWD:"
+        pwd
 
         shopt -s dotglob
         mv $TEMP_DIR/{wildcards.asm_id}* $OUTDIR/ || true
