@@ -455,13 +455,13 @@ rule C00_merge_fastk_db:
         echo "[GEP2] Contents of TEMP_DIR before Histex:"
         ls -lah $TEMP_DIR
 
-        Histex \
-        -G {wildcards.asm_id} > {output.hist}
-
         shopt -s dotglob
         mv $TEMP_DIR/{wildcards.asm_id}* $OUTDIR/ || true
         mv $TEMP_DIR/.{wildcards.asm_id}* $OUTDIR/ || true
         shopt -u dotglob
+
+        Histex \
+        -G $OUTDIR/{wildcards.asm_id} > {output.hist}
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
         echo "[GEP2] FastK merged hist complete: {output.hist}"
