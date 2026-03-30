@@ -396,6 +396,10 @@ rule C00_merge_fastk_db:
         set -euo pipefail
         exec > {log} 2>&1
 
+        echo "[DEBUG] Available memory: $(free -h)"
+        echo "[DEBUG] Memory limit from cgroup: $(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo 'n/a')"
+        ulimit -v
+
         OUTDIR=$(dirname {output.ktab})
         mkdir -p $OUTDIR
 
