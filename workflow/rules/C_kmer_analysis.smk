@@ -451,8 +451,10 @@ rule C00_merge_fastk_db:
         {wildcards.asm_id} \
         {input.roots}
 
+        Histex \
+        -G {wildcards.asm_id}.ktab > {output.hist}
+
         mv {wildcards.asm_id}.ktab {output.ktab}
-        mv {wildcards.asm_id}.hist {output.hist}
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
         echo "[GEP2] FastK merged hist complete: {output.hist}"
@@ -489,7 +491,8 @@ rule C01_run_genomescope2:
             config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id,
             f"k{w.kmer_len}", "genomescope2"
         ),
-        ploidy = config.get("PLOIDY", 2)
+        ploidy = config.get("PLOIDY", 2),
+        use_fastk = USE_FASTK
     threads: cpu_func("genomescope")
     resources:
         mem_mb = mem_func("genomescope"),
@@ -504,23 +507,35 @@ rule C01_run_genomescope2:
         """
         set -euo pipefail
         exec > {log} 2>&1
-        
-        TOOL="GenomeScope2"
-        CMD="genomescope2 -i {input.hist} -o {params.outdir} -k {wildcards.kmer_len} -p {params.ploidy} -n {wildcards.asm_id}"
-        if [ "{USE_FASTK}" = "True" ]; then
-            TOOL="GenomeScopeFK"
-            CMD="genomescopefk -i {input.hist} -o {params.outdir} -k {wildcards.kmer_len} -p {params.ploidy} -n {wildcards.asm_id}"
-        fi
-
-        echo "[GEP2] Running $TOOL for {wildcards.species}/{wildcards.asm_id}"
-        echo "[GEP2] K-mer length: {wildcards.kmer_len}"
-        echo "[GEP2] Command: $CMD"
 
         mkdir -p {params.outdir}
 
+        if [ "{params.use_fastk}" = "True" ]; then
+            echo "[GEP2] Running GeneScopeFK for {wildcards.species}/{wildcards.asm_id}"
+            echo "[GEP2] K-mer length: {wildcards.kmer_len}"
+            
+            CMD="Rscript /usr/local/bin/GeneScopeFK.R \
+                -i {input.hist} \
+                -o {params.outdir} \
+                -k {wildcards.kmer_len} \
+                -p {params.ploidy} \
+                -n {wildcards.asm_id}" 
+        else
+            echo "[GEP2] Running GenomeScope2 for {wildcards.species}/{wildcards.asm_id}"
+            echo "[GEP2] K-mer length: {wildcards.kmer_len}"
+
+            CMD="genomescope2 \
+                --input {input.hist} \
+                --output {params.outdir} \
+                --kmer_len {wildcards.kmer_len} \
+                --ploidy {params.ploidy} \
+                --name_prefix {wildcards.asm_id}"
+        fi
+    
+        echo "[GEP2] Command: $CMD"
         eval $CMD
 
-        echo "[GEP2] ✅ $TOOL complete"
+        echo "[GEP2] ✅ GenomeScope complete"
         """
 
 
