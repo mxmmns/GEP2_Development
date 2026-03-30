@@ -396,7 +396,8 @@ rule C00_merge_fastk_db:
         set -euo pipefail
         exec > {log} 2>&1
 
-        mkdir -p $(dirname {output.ktab})
+        OUTDIR=$(dirname {output.ktab})
+        mkdir -p $OUTDIR
 
         TEMP_DIR="$(mktemp -d "$GEP2_TMP/fastk_merge_{wildcards.asm_id}_XXXXXX")"
         trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -417,7 +418,7 @@ rule C00_merge_fastk_db:
         ls -lah $TEMP_DIR
 
         Histex \
-        -G $TEMP_DIR/{wildcards.asm_id} > {output.hist}
+        -G {wildcards.asm_id} > {output.hist}
 
         shopt -s dotglob
         mv $TEMP_DIR/{wildcards.asm_id}* $OUTDIR/ || true
@@ -559,9 +560,6 @@ rule C02_run_merqury:
         # Tool-Switch: TOOL und DB_ARG setzen
         if [ '{params.use_fastk}' = 'True' ]; then
             TOOL="MerquryFK"
-            # .ktab ist eine FastK-Datenbank — kein einfacher Symlink möglich.
-            # MerquryFK braucht den Pfad ohne Extension (wie FastK intern).
-            DB_ARG=$(echo "{input.kmer_db}" | sed 's/\.ktab$//')
         else
             TOOL="Merqury"
             ln -sf {input.kmer_db} read_db.meryl
