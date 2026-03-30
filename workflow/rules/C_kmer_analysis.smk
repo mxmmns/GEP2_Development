@@ -468,8 +468,8 @@ rule C00_merge_fastk_db:
         mv $TEMP_DIR/.{wildcards.asm_id}* $OUTDIR/ || true
         shopt -u dotglob
 
-        Histex \
-        -G $OUTDIR/{wildcards.asm_id} > {output.hist}
+        cd $OUTDIR
+        Histex -G {wildcards.asm_id} > {output.hist}
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
         echo "[GEP2] FastK merged hist complete: {output.hist}"
