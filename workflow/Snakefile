@@ -1572,7 +1572,7 @@ def get_kmer_stats_results():
             ])
             
             if IS_MAIN:
-                tool_string = "FastK + Meryl" if use_fastk else "Meryl"
+                tool_string = "FastK" if use_fastk else "Meryl"
                 print(f"[GEP2] K-mer analysis for {species}/{asm_id}: using {read_type} reads (k={kmer_len}, tool={tool_string})")
             
             # Merqury outputs
@@ -1589,7 +1589,8 @@ def get_kmer_stats_results():
             ])
             
             if IS_MAIN:
-                print(f"[GEP2] Merqury for {species}/{asm_id}: {mode} mode ({asm_count} asm files)")
+                merqury_string = "MerquryFK" if use_fastk else "Merqury"
+                print(f"[GEP2] {merqury_string} for {species}/{asm_id}: {mode} mode ({asm_count} asm files)")
     
     # Add per-read k-mer DB outputs (deduplicated)
     for (species, read_type, base), kmer_len in per_read_dbs.items():

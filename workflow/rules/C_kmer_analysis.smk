@@ -582,100 +582,87 @@ rule C02_run_merqury:
         set -euo pipefail
         exec > {log} 2>&1
         
-        echo "[GEP2] Running $TOOL for {wildcards.species}/{wildcards.asm_id}"
-        echo "[GEP2] K-mer database: {input.kmer_db}"
-        echo "[GEP2] Assembly count: {params.asm_count}"
-        
         export OMP_NUM_THREADS={threads}
-        
         mkdir -p {params.outdir}
         
         TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_merqury_{wildcards.species}_{wildcards.asm_id}_XXXXXX")"
         trap 'rm -rf "$TEMP_DIR"' EXIT
         cd $TEMP_DIR
         
-        # Link k-mer database
+        # Tool-Switch: TOOL und DB_ARG setzen
         if [ '{params.use_fastk}' = 'True' ]; then
-            ln -sf {input.kmer_db} read_db.ktab
             TOOL="MerquryFK"
-            DB_ARG="read_db.ktab"
+            # .ktab ist eine FastK-Datenbank — kein einfacher Symlink möglich.
+            # MerquryFK braucht den Pfad ohne Extension (wie FastK intern).
+            DB_ARG=$(echo "{input.kmer_db}" | sed 's/\.ktab$//')
         else
+            TOOL="Merqury"
             ln -sf {input.kmer_db} read_db.meryl
             export MERQURY=/opt/conda/share/merqury
-            TOOL="Merqury"
             DB_ARG="read_db.meryl"
         fi
-        
+
+        echo "[GEP2] Running $TOOL for {wildcards.species}/{wildcards.asm_id}"
+        echo "[GEP2] K-mer database: {input.kmer_db}"
+        echo "[GEP2] Assembly count: {params.asm_count}"
+
         link_assembly() {{
             local src="$1"
             local linkname="$2"
             local ext=""
-            
             case "$src" in
-                *.fasta.gz) ext=".fasta.gz" ;;
-                *.fa.gz)    ext=".fasta.gz" ;;
-                *.fna.gz)   ext=".fasta.gz" ;;
-                *.fasta)    ext=".fasta" ;;
-                *.fa)       ext=".fasta" ;;
-                *.fna)      ext=".fasta" ;;
-                *)          ext=".fasta" ;;
+                *.fasta.gz|*.fa.gz|*.fna.gz) ext=".fasta.gz" ;;
+                *.fasta|*.fa|*.fna)          ext=".fasta"    ;;
+                *)                           ext=".fasta"    ;;
             esac
-            
             ln -sf "$src" "${{linkname}}${{ext}}"
             echo "${{linkname}}${{ext}}"
         }}
-        
+
         ASM_COUNT={params.asm_count}
         ASSEMBLIES="{input.assemblies}"
-        
+
         if [ $ASM_COUNT -eq 1 ]; then
             echo "[GEP2] Running $TOOL in HAPLOID mode"
-            
             ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
             ASM1_LINK=$(link_assembly "$ASM1" "asm1")
-            
+
             if [ '{params.use_fastk}' = 'True' ]; then
-                # MerquryFK command (adjust if different)
-                MerquryFK.sh "$DB_ARG" "$ASM1_LINK" {params.prefix}
+                MerquryFK -T{threads} -P$TEMP_DIR {input.kmer_db} "$ASM1_LINK" {params.prefix}
             else
                 merqury.sh "$DB_ARG" "$ASM1_LINK" {params.prefix}
             fi
-            
+
         elif [ $ASM_COUNT -eq 2 ]; then
             echo "[GEP2] Running $TOOL in DIPLOID mode"
-            
             ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
             ASM2=$(echo "$ASSEMBLIES" | awk '{{print $2}}')
             ASM1_LINK=$(link_assembly "$ASM1" "asm1")
             ASM2_LINK=$(link_assembly "$ASM2" "asm2")
-            
+
             if [ '{params.use_fastk}' = 'True' ]; then
-                MerquryFK.sh "$DB_ARG" "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
+                MerquryFK -T{threads} -P$TEMP_DIR {input.kmer_db} "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
             else
                 merqury.sh "$DB_ARG" "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
             fi
-            
+
         else
             echo "[GEP2] ERROR: Expected 1 or 2 assembly files, got $ASM_COUNT"
             exit 1
         fi
+
         
-        # Move results
+        # Ergebnisse ins Output-Verzeichnis verschieben
         mv {params.prefix}.* {params.outdir}/ 2>/dev/null || true
-        mv *.png {params.outdir}/ 2>/dev/null || true
-        mv *.pdf {params.outdir}/ 2>/dev/null || true
-        mv *.hist {params.outdir}/ 2>/dev/null || true
-        mv *.wig {params.outdir}/ 2>/dev/null || true
-        mv *.bed {params.outdir}/ 2>/dev/null || true
-        mv asm*.meryl {params.outdir}/ 2>/dev/null || true
+        mv *.png *.pdf *.hist *.wig *.bed {params.outdir}/ 2>/dev/null || true
         mv completeness.stats {params.outdir}/{params.prefix}.completeness.stats 2>/dev/null || true
-        
+
         if [ ! -f {output.qv} ]; then
             echo "[GEP2] ERROR: QV file not created"
             exit 1
         fi
-        
-        echo "[GEP2] ✅ $TOOL completed"
+
+        echo "[GEP2] $TOOL completed"
         echo "=== QV Summary ==="
         cat {output.qv}
         echo "=== Completeness Summary ==="
