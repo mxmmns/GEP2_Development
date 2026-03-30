@@ -457,7 +457,10 @@ rule C00_merge_fastk_db:
         Histex \
         -G $TEMP_DIR/{wildcards.asm_id} > {output.hist}
 
-        mv {wildcards.asm_id}.ktab {output.ktab}
+        shopt -s dotglob
+        mv $TEMP_DIR/{wildcards.base}* $OUTDIR/ || true
+        mv $TEMP_DIR/.{wildcards.base}* $OUTDIR/ || true
+        shopt -u dotglob
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
         echo "[GEP2] FastK merged hist complete: {output.hist}"
