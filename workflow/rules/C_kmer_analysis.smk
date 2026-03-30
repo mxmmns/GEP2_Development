@@ -414,10 +414,10 @@ rule C00_merge_fastk_db:
         {input.roots}
 
         echo "[GEP2] Contents of TEMP_DIR before Histex:"
-        ls -lh $TEMP_DIR
+        ls -lah $TEMP_DIR
 
         Histex \
-        -G {wildcards.asm_id}.ktab > {output.hist}
+        -G $TEMP_DIR/{wildcards.asm_id} > {output.hist}
 
         mv {wildcards.asm_id}.ktab {output.ktab}
 
