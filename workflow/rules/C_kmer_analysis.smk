@@ -377,7 +377,7 @@ rule C00_merge_fastk_db:
         ),
         hist = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.hist"
+            "k{kmer_len}", "{asm_id}.hist.txt"
         )
     wildcard_constraints:
         kmer_len = r"\d+"
@@ -430,7 +430,7 @@ rule C00_merge_fastk_db:
         echo "[DEBUG] PWD before Histex: $(pwd)"
         echo "[DEBUG] OUTDIR contents:"
         ls -lah
-        Histex -G {wildcards.asm_id} > {output.hist}
+        Histex -A -G {wildcards.asm_id} > "{output.hist}.txt"
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
         echo "[GEP2] FastK merged hist complete: {output.hist}"
