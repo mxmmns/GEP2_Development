@@ -413,7 +413,7 @@ rule C00_merge_fastk_db:
         -t \
         -h \
         -T{threads} \
-        -# 1 \
+        -#1 \
         {wildcards.asm_id} \
         {input.roots}
 
