@@ -282,6 +282,10 @@ rule C00_build_per_read_fastk_db:
         ktab = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
             "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.ktab"
+        ),
+        hist = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
+            "reads", "{read_type}", "fastk_k{kmer_len}", "{base}.hist"
         )
     wildcard_constraints:
         kmer_len = r"\d+",
@@ -325,7 +329,8 @@ rule C00_build_per_read_fastk_db:
             -T{threads} \
             -P$TEMP_DIR \
             -N$TEMP_DIR/{wildcards.base} \
-            -t \
+            -t1 \
+            -h \
             $INPUT_FILE
 
         echo "[GEP2] FastK finished. Moving output..."
