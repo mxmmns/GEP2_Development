@@ -381,9 +381,6 @@ rule C00_merge_fastk_db:
         )
     wildcard_constraints:
         kmer_len = r"\d+"
-    params:
-        fast_tmp = config["FAST_TEMP_DIR"],
-        tmp = config["TEMP_DIR"]
     threads: cpu_func("kmer_count")
     resources:
         mem_mb = mem_func("kmer_count"),
@@ -399,44 +396,41 @@ rule C00_merge_fastk_db:
         set -euo pipefail
         exec > {log} 2>&1
 
-        FAST_TEMP_DIR="{params.fast_tmp}"
-        GEP2_TMP="{params.tmp}"
-
-        mkdir -p "$FAST_TEMP_DIR"
-        mkdir -p "$GEP2_TMP"
+        echo "[GEP2] Starting FastK merge"
+        echo "[GEP2] Input roots:"
+        echo {input.roots}
 
         OUTDIR=$(dirname {output.ktab})
-        mkdir -p $OUTDIR
+        mkdir -p "$OUTDIR"
 
-        WORKDIR="$(mktemp -d "$GEP2_TMP/fastk_merge_{wildcards.asm_id}_XXXXXX")"
-        CACHEDIR="$(mktemp -d "$FAST_TEMP_DIR/fastk_cache_{wildcards.asm_id}_XXXXXX")"
+        WORKDIR=$(mktemp -d)
+        trap 'rm -rf "$WORKDIR"' EXIT
+        cd "$WORKDIR"
 
-        trap 'rm -rf "$WORKDIR" "$CACHEDIR"' EXIT
-
-        cd $WORKDIR
-
-        echo "[GEP2] Merging FastK tables:"
-        echo {input.roots}
+        echo "[GEP2] Working directory: $WORKDIR"
 
         Fastmerge \
         -t \
         -h \
         -T{threads} \
-        -P$CACHEDIR \
+        -# 1 \
         {wildcards.asm_id} \
         {input.roots}
 
+        echo "[GEP2] Files after merge:"
+        ls -lah
+
         shopt -s dotglob
-        mv {wildcards.asm_id}* $OUTDIR/
-        mv .{wildcards.asm_id}* $OUTDIR/
+        mv {wildcards.asm_id}* "$OUTDIR"/
+        mv .{wildcards.asm_id}* "$OUTDIR"/
         shopt -u dotglob
 
-        cd $OUTDIR
+        cd "$OUTDIR"
 
         echo "[DEBUG] PWD before Histex: $(pwd)"
         echo "[DEBUG] OUTDIR contents:"
-        ls -lah $OUTDIR
-        Histex -T{threads} -G {wildcards.asm_id} > {output.hist}
+        ls -lah
+        Histex -T {threads} -G {wildcards.asm_id} > {output.hist}
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
         echo "[GEP2] FastK merged hist complete: {output.hist}"
