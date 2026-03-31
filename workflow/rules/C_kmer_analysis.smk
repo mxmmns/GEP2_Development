@@ -434,44 +434,48 @@ rule C00_merge_fastk_db:
         set -euo pipefail
         exec > {log} 2>&1
 
-        echo "[DEBUG] Available memory: $(free -h)"
-        echo "[DEBUG] Memory limit from cgroup: $(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo 'n/a')"
-        ulimit -v
+        # echo "[DEBUG] Available memory: $(free -h)"
+        # echo "[DEBUG] Memory limit from cgroup: $(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo 'n/a')"
+        # ulimit -v
 
         OUTDIR=$(dirname {output.ktab})
         mkdir -p $OUTDIR
 
-        TEMP_DIR="$(mktemp -d "$GEP2_TMP/fastk_merge_{wildcards.asm_id}_XXXXXX")"
-        trap 'rm -rf "$TEMP_DIR"' EXIT
-        cd $TEMP_DIR
+        WORKDIR="$(mktemp -d "$GEP2_TMP/fastk_merge_{wildcards.asm_id}_XXXXXX")"
+        CACHEDIR="$(mktemp -d "$FAST_TEMP_DIR/fastk_cache_{wildcards.asm_id}_XXXXXX")"
+        trap 'rm -rf "$WORKDIR" "$CACHEDIR"' EXIT
+
+        cd $WORKDIR
 
         echo "[GEP2] Merging FastK tables:"
         echo {input.roots}
 
         Fastmerge \
         -t \
+        -h \
         -T{threads} \
-        -P$TEMP_DIR \
+        -P$CACHEDIR \
         {wildcards.asm_id} \
         {input.roots}
 
-        echo "[DEBUG] TEMP_DIR contents:"
-        ls -lah $TEMP_DIR
-        echo "[DEBUG] GEP2_TMP contents:"
-        ls -lah $GEP2_TMP | head -20
-        echo "[DEBUG] PWD:"
-        pwd
+        # echo "[DEBUG] TEMP_DIR contents:"
+        # ls -lah $TEMP_DIR
+        # echo "[DEBUG] GEP2_TMP contents:"
+        # ls -lah $GEP2_TMP | head -20
+        # echo "[DEBUG] PWD:"
+        # pwd
 
         shopt -s dotglob
-        mv $TEMP_DIR/{wildcards.asm_id}* $OUTDIR/
-        mv $TEMP_DIR/.{wildcards.asm_id}* $OUTDIR/
+        mv {wildcards.asm_id}* $OUTDIR/
+        mv .{wildcards.asm_id}* $OUTDIR/
         shopt -u dotglob
 
         cd $OUTDIR
+
         echo "[DEBUG] PWD before Histex: $(pwd)"
         echo "[DEBUG] OUTDIR contents:"
         ls -lah $OUTDIR
-        Histex -G {wildcards.asm_id} > {output.hist}
+        Histex -T{threads} -G {wildcards.asm_id} > {output.hist}
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
         echo "[GEP2] FastK merged hist complete: {output.hist}"
