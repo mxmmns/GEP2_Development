@@ -467,7 +467,7 @@ rule C00_convert_hist_to_ascii:
 
         echo "[GEP2] Converting {input.hist_bin} to ASCII for GenomeScopeFK"
 
-        OUTDIR=$(dirname {output.ktab})
+        OUTDIR=$(dirname {input.hist_bin})
         cd "$OUTDIR"
 
         Histex -G {input.hist_bin} > {output.hist_ascii}
