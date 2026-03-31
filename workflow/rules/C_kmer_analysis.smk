@@ -468,7 +468,7 @@ rule C00_merge_fastk_db:
         echo "[DEBUG] PWD before Histex: $(pwd)"
         echo "[DEBUG] OUTDIR contents:"
         ls -lah
-        Histex -T {threads} -G {wildcards.asm_id} > {output.hist}
+        Histex -G {wildcards.asm_id} > {output.hist}
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
         echo "[GEP2] FastK merged hist complete: {output.hist}"
