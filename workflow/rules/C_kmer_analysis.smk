@@ -171,9 +171,17 @@ def get_asm_count(wildcards):
     asm_files = get_assembly_files(wildcards.species, wildcards.asm_id)
     return len([v for v in asm_files.values() if v and v != "None"])
 
-def fastk_roots(inputs):
-    ktabs = get_assembly_kmer_db_inputs(wildcards)
-    return [i.replace(".ktab", "") for i in ktabs]
+
+def get_genomescope_hist(wildcards):
+    asm_dir = os.path.join(
+        config["OUT_FOLDER"], "GEP2_results", wildcards.species, wildcards.asm_id, f"k{wildcards.kmer_len}"
+    )
+    if USE_FASTK:
+        # ASCII .hist.txt
+        return os.path.join(asm_dir, f"{wildcards.asm_id}.hist.txt")
+    else:
+        # Binär .hist
+        return os.path.join(asm_dir, f"{wildcards.asm_id}.hist")
 
 
 # -------------------------------------------------------------------------------
@@ -367,7 +375,10 @@ rule C00_merge_assembly_kmer_db:
         """
 
 rule C00_merge_fastk_db:
-    """Merge FastK k-mer tables for an assembly."""
+    """
+    Merge FastK k-mer tables for an assembly.
+    Produces merged .ktab and .hist (binary) files.
+    """
     input:
         roots = get_assembly_kmer_db_inputs
     output:
@@ -425,16 +436,45 @@ rule C00_merge_fastk_db:
         mv .{wildcards.asm_id}* "$OUTDIR"/
         shopt -u dotglob
 
+        echo "[GEP2] Merge complete. Files in $OUTDIR:"
+        ls -lah "$OUTDIR"
+        """
+
+rule C00_convert_hist_to_ascii:
+    """
+    Convert binary FastK .hist to ASCII .hist.txt suitable for GenomeScopeFK
+    """
+    input:
+        hist_bin = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.hist"
+        )
+    output:
+        hist_ascii = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.hist.txt"
+        )
+    container: CONTAINERS["fastk"]
+    log:
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "logs", "C00_fastk_hist_ascii_k{kmer_len}.log"
+        )
+    shell:
+        """
+        set -euo pipefail
+        exec > {log} 2>&1
+
+        echo "[GEP2] Converting {input.hist_bin} to ASCII for GenomeScopeFK"
+
+        OUTDIR=$(dirname {output.ktab})
         cd "$OUTDIR"
 
-        echo "[DEBUG] PWD before Histex: $(pwd)"
-        echo "[DEBUG] OUTDIR contents:"
-        ls -lah
-        Histex -A -G {wildcards.asm_id} > {output.hist}
+        Histex -G {input.hist_bin} > {output.hist_ascii}
 
-        echo "[GEP2] FastK merge complete: {output.ktab}"
-        echo "[GEP2] FastK merged hist complete: {output.hist}"
+        echo "[GEP2] Conversion complete: {output.hist_ascii}"
         """
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RULES - GenomeScope2 (now at assembly level)
@@ -443,10 +483,7 @@ rule C00_merge_fastk_db:
 rule C01_run_genomescope2:
     """Run GenomeScope2 analysis on assembly-specific k-mer histogram."""
     input:
-        hist = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "k{kmer_len}", "{asm_id}.hist"
-        )
+        hist = get_genomescope_hist
     output:
         summary = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
