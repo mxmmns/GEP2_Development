@@ -402,16 +402,15 @@ rule C00_merge_fastk_db:
         FAST_TEMP_DIR="{params.fast_tmp}"
         GEP2_TMP="{params.tmp}"
 
-        # echo "[DEBUG] Available memory: $(free -h)"
-        # echo "[DEBUG] Memory limit from cgroup: $(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo 'n/a')"
-        # ulimit -v
+        mkdir -p "$FAST_TEMP_DIR"
+        mkdir -p "$GEP2_TMP"
 
         OUTDIR=$(dirname {output.ktab})
         mkdir -p $OUTDIR
 
         WORKDIR="$(mktemp -d "$GEP2_TMP/fastk_merge_{wildcards.asm_id}_XXXXXX")"
         CACHEDIR="$(mktemp -d "$FAST_TEMP_DIR/fastk_cache_{wildcards.asm_id}_XXXXXX")"
-        
+
         trap 'rm -rf "$WORKDIR" "$CACHEDIR"' EXIT
 
         cd $WORKDIR
@@ -426,13 +425,6 @@ rule C00_merge_fastk_db:
         -P$CACHEDIR \
         {wildcards.asm_id} \
         {input.roots}
-
-        # echo "[DEBUG] TEMP_DIR contents:"
-        # ls -lah $TEMP_DIR
-        # echo "[DEBUG] GEP2_TMP contents:"
-        # ls -lah $GEP2_TMP | head -20
-        # echo "[DEBUG] PWD:"
-        # pwd
 
         shopt -s dotglob
         mv {wildcards.asm_id}* $OUTDIR/
