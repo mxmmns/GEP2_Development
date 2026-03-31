@@ -381,6 +381,9 @@ rule C00_merge_fastk_db:
         )
     wildcard_constraints:
         kmer_len = r"\d+"
+    params:
+        fast_tmp = config["FAST_TEMP_DIR"],
+        tmp = config["TEMP_DIR"]
     threads: cpu_func("kmer_count")
     resources:
         mem_mb = mem_func("kmer_count"),
@@ -396,6 +399,9 @@ rule C00_merge_fastk_db:
         set -euo pipefail
         exec > {log} 2>&1
 
+        FAST_TEMP_DIR="{params.fast_tmp}"
+        GEP2_TMP="{params.tmp}"
+
         # echo "[DEBUG] Available memory: $(free -h)"
         # echo "[DEBUG] Memory limit from cgroup: $(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo 'n/a')"
         # ulimit -v
@@ -405,6 +411,7 @@ rule C00_merge_fastk_db:
 
         WORKDIR="$(mktemp -d "$GEP2_TMP/fastk_merge_{wildcards.asm_id}_XXXXXX")"
         CACHEDIR="$(mktemp -d "$FAST_TEMP_DIR/fastk_cache_{wildcards.asm_id}_XXXXXX")"
+        
         trap 'rm -rf "$WORKDIR" "$CACHEDIR"' EXIT
 
         cd $WORKDIR
