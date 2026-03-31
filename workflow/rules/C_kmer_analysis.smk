@@ -464,11 +464,14 @@ rule C00_merge_fastk_db:
         pwd
 
         shopt -s dotglob
-        mv $TEMP_DIR/{wildcards.asm_id}* $OUTDIR/ || true
-        mv $TEMP_DIR/.{wildcards.asm_id}* $OUTDIR/ || true
+        mv $TEMP_DIR/{wildcards.asm_id}* $OUTDIR/
+        mv $TEMP_DIR/.{wildcards.asm_id}* $OUTDIR/
         shopt -u dotglob
 
         cd $OUTDIR
+        echo "[DEBUG] PWD before Histex: $(pwd)"
+        echo "[DEBUG] OUTDIR contents:"
+        ls -lah $OUTDIR
         Histex -G {wildcards.asm_id} > {output.hist}
 
         echo "[GEP2] FastK merge complete: {output.ktab}"
