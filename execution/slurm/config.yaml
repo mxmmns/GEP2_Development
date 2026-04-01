@@ -42,7 +42,7 @@ default-resources:
 software-deployment-method: [apptainer]
 
 # IMPORTANT!!! bind here all the folders you use, like "--bind /my/storage:/my/storage --bind /my/folder:/my/folder"
-apptainer-args: ""
+apptainer-args: "--bind /scratch/maxim95/bachelor/:/scratch/maxim95/bachelor/"
 
 # -----------------------------------------------------------------------------
 # Slurm Plugin Settings
