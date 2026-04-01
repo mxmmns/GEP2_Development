@@ -2378,4 +2378,4 @@ include: "rules/Z_reporting.smk"
 
 rule all:
     input:
-        get_kmer_stats_results()
+        get_all_expected_outputs()
