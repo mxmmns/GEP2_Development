@@ -144,12 +144,12 @@ TELO_TRACK: auto
 # Contamination analysis --------------------------------------------------------------------------
 
 # Contamination screening with NCBI FCS-GX (requires 512 GB RAM!)
-RUN_FCS: on
+RUN_FCS: off
 # Skip FCS-GX for assemblies flagged with skip=on in data table
 SKIP_FCS: off
 
 # Contamination screening with BlobTools
-RUN_BLOB: on
+RUN_BLOB: off
 # Skip BlobTools for assemblies flagged with skip=on in data table
 SKIP_BLOB: off
 
