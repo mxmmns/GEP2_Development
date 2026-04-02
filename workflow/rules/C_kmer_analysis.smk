@@ -98,7 +98,25 @@ def get_per_read_kmer_input(wildcards):
             if matches:
                 return matches[0]
     
-    raise ValueError(f"Could not find processed read file for {species}/{read_type}/{base}")
+    # raise ValueError(f"Could not find processed read file for {species}/{read_type}/{base}")
+    # Return expected processed file even if it does not exist yet
+    if read_type in ["illumina", "10x"]:
+        if config.get("TRIM_PE", True):
+            return os.path.join(base_dir, "processed", f"{read_type}_Path1_{base}_1_trimmed.fq.gz")
+        else:
+            return os.path.join(base_dir, f"{read_type}_Path1_{base}_1_trimmed.fq.gz")
+    elif read_type == "ont":
+        if config.get("CORRECT_ONT", True):
+            return os.path.join(base_dir, "processed", f"ont_Path1_{base}_corrected.fq.gz")
+        else:
+            return os.path.join(base_dir, f"ont_Path1_{base}_corrected.fq.gz")
+    elif read_type == "hifi":
+        if config.get("FILTER_HIFI", True):
+            return os.path.join(base_dir, "processed", f"hifi_Path1_{base}_filtered.fq.gz")
+        else
+            return os.path.join(base_dir, f"hifi_Path1_{base}_filtered.fq.gz")
+
+    raise ValueError(f"Could not determine read file path for {species}/{read_type}/{base}")
 
 
 def get_assembly_kmer_db_inputs(wildcards):
