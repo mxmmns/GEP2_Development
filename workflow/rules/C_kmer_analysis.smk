@@ -113,7 +113,7 @@ def get_per_read_kmer_input(wildcards):
     elif read_type == "hifi":
         if config.get("FILTER_HIFI", True):
             return os.path.join(base_dir, "processed", f"hifi_Path1_{base}_filtered.fq.gz")
-        else
+        else:
             return os.path.join(base_dir, f"hifi_Path1_{base}_filtered.fq.gz")
 
     raise ValueError(f"Could not determine read file path for {species}/{read_type}/{base}")
