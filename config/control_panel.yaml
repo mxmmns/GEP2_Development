@@ -6,10 +6,10 @@
 ## Table columns: sp_name, asm_id, skip, asm_files, read_type, read_files
 ## Table extension is flexible (xlsx, csv...) and can be online (i.e., google drive)
 ## For google drive and such, set anyone with the link as viewer
-DATA_TABLE: "https://docs.google.com/spreadsheets/d/18AjCJE3H3xVF45WUAgeAvpwKcaOrTLk9QXJByOM240I/edit?usp=sharing"
+DATA_TABLE: "https://docs.google.com/spreadsheets/d/1xmsstJGBo45SEQgCPncE76u51_VN5IDG9sFFafYkGfI/edit?usp=sharing"
 
 # Path where a folder named GEP2_results will be created
-OUT_FOLDER: "/scratch/maxim95/bachelor/gep2_test_results/run05/"
+OUT_FOLDER: "/scratch/maxim95/bachelor/gep2_test_results/run06/"
 
 # Per job max resources
 myCPU: 24      # Maximum cores per job (2-24)
