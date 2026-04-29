@@ -1,6 +1,6 @@
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # GEP2 - Read Processing Rules
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 # Note: The following are defined in the main Snakefile:
 #   - _MISSING_IN: Placeholder for missing input files
@@ -13,9 +13,9 @@
 #   - DOWNLOAD_MANIFEST, DOWNLOAD_MANIFEST_DICT: Download manifest data
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULE ORDER
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 ruleorder: B04_check_uli_primers > B00_centralize_reads
 ruleorder: B05_filter_hifi_adapters > B00_centralize_reads
@@ -25,71 +25,55 @@ ruleorder: B00_centralize_reads > B00_link_long_reads > B01_compress_long_reads
 ruleorder: B00_centralize_reads > B00_link_pe_reads > B01_compress_pe_reads
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # INPUT FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
+
+# Load centralize map (at module level in B_proc_reads.smk, next to DOWNLOAD_MANIFEST)
+_centralize_map_path = os.path.join(config["OUT_FOLDER"], "GEP2_results", "centralize_map.json")
+if os.path.exists(_centralize_map_path):
+    with open(_centralize_map_path) as f:
+        CENTRALIZE_MAP = json.load(f)
+else:
+    CENTRALIZE_MAP = {}
+
 
 def _get_source_for_centralized_read(wildcards):
     """Find the source file that needs to be symlinked to the centralized location."""
-    filename = wildcards.filename
+    # The centralized path is the output of B00
+    centralized_path = os.path.join(
+        config["OUT_FOLDER"], "GEP2_results", "data",
+        wildcards.species, "reads", wildcards.read_type, wildcards.filename
+    )
+
+    # DEBUG
+    found = centralized_path in CENTRALIZE_MAP
+    if not found and CENTRALIZE_MAP:
+        # Show first key to compare format
+        first_key = next(iter(CENTRALIZE_MAP))
     
-    # Extract identifier from filename (e.g., "illumina_Path1_ERR5709830_1.fq.gz" -> "ERR5709830_1")
-    identifier = re.sub(r'^(hifi|ont|illumina|10x|hic)_Path\d+_', '', filename, flags=re.IGNORECASE)
+    # Look up the original source
+    if centralized_path in CENTRALIZE_MAP:
+        return CENTRALIZE_MAP[centralized_path]
+    
+    # Fallback for downloads: construct downloaded_data path
+    identifier = re.sub(r'^(hifi|ont|illumina|10x|hic)_Path\d+_', '', wildcards.filename, flags=re.IGNORECASE)
     identifier = identifier.replace('.fq.gz', '').replace('.fastq.gz', '')
     
     base_path = os.path.join(
-        config["OUT_FOLDER"], "GEP2_results", "downloaded_data", 
-        wildcards.species, "reads"  # NO assembly folder
+        config["OUT_FOLDER"], "GEP2_results", "downloaded_data",
+        wildcards.species, "reads"
     )
     
-    # Search in downloaded_data (species-level, no assembly folder)
     for rt_variant in [wildcards.read_type, wildcards.read_type.upper(), wildcards.read_type.lower()]:
         for ext in [".fastq.gz", ".fq.gz"]:
             pattern = os.path.join(base_path, rt_variant, f"{identifier}{ext}")
             if os.path.exists(pattern):
                 return pattern
-            # Also try glob for flexibility
-            matches = glob.glob(pattern)
-            if matches:
-                return matches[0]
     
-    # Check original paths in samples_config
-    try:
-        sp_data = samples_config["sp_name"][wildcards.species]
-        for asm_id, asm_data in sp_data["asm_id"].items():
-            read_type_dict = asm_data.get("read_type", {})
-            
-            for read_type, rt_data in read_type_dict.items():
-                if normalize_read_type(read_type) != wildcards.read_type.lower():
-                    continue
-                
-                read_files = rt_data.get("read_files", {})
-                for path_key, path_value in read_files.items():
-                    if not path_value or path_value == "None":
-                        continue
-                    
-                    if isinstance(path_value, str) and "," in path_value:
-                        paths = [p.strip() for p in path_value.split(",")]
-                    elif isinstance(path_value, list):
-                        paths = path_value
-                    else:
-                        paths = [str(path_value)]
-                    
-                    for path in paths:
-                        path_base = os.path.basename(path)
-                        path_id = path_base.replace('.fq.gz', '').replace('.fastq.gz', '').replace('.fq', '').replace('.fastq', '')
-                        
-                        if identifier in path_id or path_id in identifier:
-                            if os.path.exists(path):
-                                return path
-    except (KeyError, TypeError, AttributeError):
-        pass
-    
-    # Fallback: construct expected download path (NO assembly folder)
-    expected_path = os.path.join(
+    return os.path.join(
         base_path, wildcards.read_type.lower(), f"{identifier}.fastq.gz"
     )
-    return expected_path
 
 
 def _linkable_long_src(w):
@@ -100,30 +84,7 @@ def _linkable_long_src(w):
     if not yaml_path.endswith(".gz"):
         return _MISSING_IN
     
-    # Convert centralized path to downloaded path
-    # From: .../data/{species}/reads/{read_type}/hifi_Path1_ERR12205285.fq.gz
-    # To:   .../downloaded_data/{species}/reads/{read_type}/ERR12205285.fastq.gz
-    
-    if "/data/" in yaml_path and "_Path" in os.path.basename(yaml_path):
-        # Extract accession from filename (e.g., hifi_Path1_ERR12205285.fq.gz -> ERR12205285)
-        basename = os.path.basename(yaml_path)
-        # Remove read_type prefix and Path index, and change extension
-        parts = basename.replace(".fq.gz", "").split("_")
-        # Find the accession part (starts with ERR, SRR, DRR, or is the last non-empty part)
-        accession = None
-        for part in parts:
-            if part.startswith(("ERR", "SRR", "DRR")) or (not accession and part and part not in ["hifi", "ont", "hic", "illumina", "10x"]):
-                accession = part
-        
-        if accession:
-            downloaded_path = yaml_path.replace("/data/", "/downloaded_data/")
-            downloaded_path = os.path.join(
-                os.path.dirname(downloaded_path),
-                f"{accession}.fastq.gz"
-            )
-            return downloaded_path
-    
-    return yaml_path
+    return _resolve_centralized_source(yaml_path, w.read_type, w.species)
 
 
 def _compressible_long_src(w):
@@ -142,8 +103,7 @@ def _linkable_pe_r1(w):
     if not yaml_path.endswith(".gz"):
         return _MISSING_IN
     
-    # Convert centralized path to downloaded path
-    return _convert_centralized_to_downloaded(yaml_path, w.read_type)
+    return _resolve_centralized_source(yaml_path, w.read_type, w.species)
 
 
 def _linkable_pe_r2(w):
@@ -156,33 +116,26 @@ def _linkable_pe_r2(w):
     if not yaml_path.endswith(".gz"):
         return _MISSING_IN
     
-    # Convert centralized path to downloaded path
-    return _convert_centralized_to_downloaded(yaml_path, w.read_type)
+    return _resolve_centralized_source(yaml_path, w.read_type, w.species)
 
 
-def _convert_centralized_to_downloaded(yaml_path, read_type):
-    """Convert a centralized data path to the corresponding downloaded_data path."""
+def _resolve_centralized_source(yaml_path, read_type, species):
+    """Given a centralized path under /data/, find the actual source file."""
+    # If it's not a centralized path, return as-is
     if "/data/" not in yaml_path or "_Path" not in os.path.basename(yaml_path):
         return yaml_path
     
+    # Look up in centralize map
+    if yaml_path in CENTRALIZE_MAP:
+        return CENTRALIZE_MAP[yaml_path]
+    
+    # Fallback: assume it was downloaded
     basename = os.path.basename(yaml_path)
-    # Remove read_type prefix and Path index: illumina_Path1_SRR123_1.fq.gz -> SRR123_1
-    parts = basename.replace(".fq.gz", "").replace(".fastq.gz", "").split("_")
+    identifier = re.sub(r'^(hifi|ont|illumina|10x|hic)_Path\d+_', '', basename, flags=re.IGNORECASE)
+    identifier = identifier.replace('.fq.gz', '').replace('.fastq.gz', '')
     
-    # Reconstruct accession with pair suffix
-    # e.g., ["illumina", "Path1", "SRR123", "1"] -> "SRR123_1"
-    accession_parts = []
-    skip_next = False
-    for i, part in enumerate(parts):
-        if skip_next:
-            skip_next = False
-            continue
-        if part.lower() in ["hifi", "ont", "hic", "illumina", "10x"]:
-            continue
-        if part.startswith("Path"):
-            continue
-        accession_parts.append(part)
-    
+    parts = identifier.split("_")
+    accession_parts = [p for p in parts if p.lower() not in ["hifi", "ont", "hic", "illumina", "10x"] and not p.startswith("Path")]
     accession = "_".join(accession_parts)
     
     downloaded_path = yaml_path.replace("/data/", "/downloaded_data/")
@@ -269,7 +222,7 @@ def _get_qc_reports_for_multiqc(w):
     species = w.species
     read_type = w.read_type
     read_type_lower = read_type.lower()
-    
+ 
     reports = []
     report_dir = os.path.join(
         config["OUT_FOLDER"], "GEP2_results", "data", species,
@@ -289,9 +242,9 @@ def _get_qc_reports_for_multiqc(w):
                     os.path.join(report_dir, f"{rt_lower}_Path{idx}_{base}_fastqc.zip")
                 ])
                 
-                if config.get("TRIM_HIFI", True):
+                if config.get("FILTER_HIFI", True):
                     reports.extend([
-                        os.path.join(report_dir, f"{rt_lower}_Path{idx}_{base}_haf_mqc.yaml"),
+                        os.path.join(report_dir, f"{rt_lower}_Path{idx}_{base}_bbduk.stats"),
                         os.path.join(report_dir, f"{rt_lower}_Path{idx}_{base}_filtered_nanoplot")
                     ])
                 else:
@@ -325,9 +278,9 @@ def _get_qc_reports_for_multiqc(w):
     return reports
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULES - Read Centralization
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 rule B00_centralize_reads:
     """Create symlinks from downloaded_data to centralized data/reads location."""
@@ -367,9 +320,9 @@ rule B00_centralize_reads:
         shell(cmd)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULES - Long Reads: Link/Compress
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 rule B00_link_long_reads:
     """Create symlink for already-compressed long reads."""
@@ -381,7 +334,7 @@ rule B00_link_long_reads:
             "reads", "{read_type}", "{read_type}_Path{idx}_{base}.fq.gz"
         )
     wildcard_constraints:
-        read_type = r"(hifi|ont|hic)",
+        read_type = r"(hifi|ont)",
         idx = r"\d+",
         base = r"[^/]+(?<!_corrected)(?<!_filtered)"
     threads: cpu_func("light_task")
@@ -420,7 +373,7 @@ rule B01_compress_long_reads:
             "reads", "{read_type}", "{read_type}_Path{idx}_{base}.fq.gz"
         )
     wildcard_constraints:
-        read_type = r"(hifi|ont|hic)",
+        read_type = r"(hifi|ont)",
         idx = r"\d+",
         base = r"[^/]+(?<!_corrected)(?<!_filtered)"
     threads: cpu_func("compress_reads")
@@ -449,9 +402,9 @@ rule B01_compress_long_reads:
         shell(cmd)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULES - Paired-End Reads: Link/Compress
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 rule B00_link_pe_reads:
     """Create symlinks for already-compressed PE reads (when TRIM_PE is off)."""
@@ -468,7 +421,7 @@ rule B00_link_pe_reads:
             "reads", "{read_type}", "{read_type}_Path{idx}_{base}_2.fq.gz"
         )
     wildcard_constraints:
-        read_type = r"(illumina|10x)",
+        read_type = r"(illumina|10x|hic)",
         idx = r"\d+",
         base = r"[^/]+(?<!_trimmed)"
     threads: cpu_func("light_task")
@@ -515,7 +468,7 @@ rule B01_compress_pe_reads:
             "reads", "{read_type}", "{read_type}_Path{idx}_{base}_2.fq.gz"
         )
     wildcard_constraints:
-        read_type = r"(illumina|10x)",
+        read_type = r"(illumina|10x|hic)",
         idx = r"\d+",
         base = r"[^/]+(?<!_trimmed)"
     threads: cpu_func("compress_reads")
@@ -547,9 +500,9 @@ rule B01_compress_pe_reads:
         shell(cmd)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULES - PE Trimming
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 rule B02_trim_pe_fastp:
     """Trim and QC paired-end reads with fastp."""
@@ -580,7 +533,7 @@ rule B02_trim_pe_fastp:
             "reads", "{read_type}", "processed", "reports", "{read_type}_Path{idx}_{base}_fastp.html"
         )
     wildcard_constraints:
-        read_type = r"(illumina|10x)",
+        read_type = r"(illumina|10x|hic)",
         idx = r"\d+",
         base = r"[^/]+"
     threads: cpu_func("trim_pe")
@@ -618,9 +571,9 @@ rule B02_trim_pe_fastp:
         """
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULES - Long Read Processing
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 rule B03_ont_correction:
     """Correct ONT reads using Hifiasm (if enabled)."""
@@ -652,7 +605,10 @@ rule B03_ont_correction:
         
         mkdir -p $(dirname {output.corrected}) $(dirname {log})
         
-        TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_ont_correct_{wildcards.species}_{wildcards.read_type}_{wildcards.base}_XXXXXX")"
+        WORK_DIR="$(gep2_get_workdir 250)"
+        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_ont_correct_{wildcards.species}_{wildcards.read_type}_{wildcards.base}_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+
         cd $TEMP_DIR
         
         echo "Starting ONT correction with Hifiasm..." > {log}
@@ -706,8 +662,6 @@ rule B03_ont_correction:
             exit 1
         fi
         
-        cd /
-        rm -rf $TEMP_DIR
         '''
 
 
@@ -743,8 +697,10 @@ rule B04_check_uli_primers:
         
         mkdir -p $(dirname {output.report})
         
-        TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_uli_check_XXXXXX")"
+        WORK_DIR="$(gep2_get_workdir 5)"
+        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_uli_check_XXXXXX")"
         trap 'rm -rf "$TEMP_DIR"' EXIT
+
         cd "$TEMP_DIR"
         
         seqtk sample -s789 {input.reads} 100000 > subset.fq
@@ -773,23 +729,19 @@ EOF
 
 
 rule B05_filter_hifi_adapters:
-    """Filter HiFi reads with HiFiAdapterFilt."""
+    """Filter HiFi reads containing SMRTbell adapter sequences using bbduk."""
     input:
-        reads = _get_hifiasm_input
+        reads = _get_hifiasm_input,
+        adapters = workflow.source_path("../scripts/hifi_blocklist.fa")
     output:
         filtered = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
             "reads", "{read_type}", "processed", "{read_type}_Path{idx}_{base}_filtered.fq.gz"
         ),
-        report = os.path.join(
+        bbduk_stats = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
             "reads", "{read_type}", "processed", "reports",
-            "{read_type}_Path{idx}_{base}_haf_mqc.yaml"
-        ),
-        stats = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
-            "reads", "{read_type}", "processed", "reports",
-            "{read_type}_Path{idx}_{base}_haf.stats"
+            "{read_type}_Path{idx}_{base}_bbduk.stats"
         )
     wildcard_constraints:
         read_type = r"(hifi)",
@@ -804,60 +756,30 @@ rule B05_filter_hifi_adapters:
         os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
             "reads", "{read_type}", "logs",
-            "B05_hifiadapterfilt.{read_type}_Path{idx}_{base}.log"
+            "B05_bbduk.{read_type}_Path{idx}_{base}.log"
         )
     shell:
         r'''
         set -euo pipefail
         exec > {log} 2>&1
-        
+
         mkdir -p $(dirname {output.filtered})
-        mkdir -p $(dirname {output.report})
-        
-        TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_hifi_filter_XXXXXX")"
-        trap 'rm -rf "$TEMP_DIR"' EXIT
-        cd "$TEMP_DIR"
-        
-        tot=$(zcat {input.reads} | awk 'NR%4==1' | wc -l)
-        
-        ln -s {input.reads} input.fq.gz
-        
-        /opt/HiFiAdapterFilt/hifiadapterfilt.sh -p input -t {threads} -o .
-        
-        mv input.filt.fastq.gz {output.filtered}
-        
-        if [[ -f "input.stats" ]]; then
-            cp input.stats {output.stats}
-        else
-            echo "No stats file produced" > {output.stats}
-        fi
-        
-        kept=$(zcat {output.filtered} | awk 'NR%4==1' | wc -l)
-        rem=$((tot - kept))
-        pct=$(awk -v r="$rem" -v t="$tot" 'BEGIN{{printf("%.2f", t>0 ? 100*r/t : 0)}}')
-        
-        cat > {output.report} << EOF
-id: "hifiadapterfilt"
-section_name: "HiFiAdapterFilt"
-description: "HiFi adapter filtering statistics"
-plot_type: "generalstats"
-headers:
-  - haf_removed_pct:
-      title: "Removed %"
-      max: 100
-      min: 0
-      suffix: "%"
-      scale: "RdYlGn-rev"
-data:
-  {wildcards.read_type}_Path{wildcards.idx}_{wildcards.base}:
-    haf_removed_pct: $pct
-EOF
+        mkdir -p $(dirname {output.bbduk_stats})
+
+        bbduk.sh -Xmx$(({resources.mem_mb} * 85 / 100))m \
+            in={input.reads} \
+            out={output.filtered} \
+            ref={input.adapters} \
+            stats={output.bbduk_stats} \
+            k=27 hdist=1 rcomp=t \
+            threads={threads} \
+            overwrite=t
         '''
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULES - QC
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 rule B06_fastqc_pe_reads:
     """Run FastQC on paired-end reads (250k subsample)."""
@@ -875,7 +797,7 @@ rule B06_fastqc_pe_reads:
             "{read_type}_Path{idx}_{base}_{read}_fastqc.zip"
         )
     wildcard_constraints:
-        read_type = r"(illumina|10x)",
+        read_type = r"(illumina|10x|hic)",
         read = r"(1|2)",
         idx = r"\d+",
         base = r"[^/]+"
@@ -897,8 +819,13 @@ rule B06_fastqc_pe_reads:
         
         mkdir -p $(dirname {output.html})
         
-        TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_fastqc_XXXXXX")"
+        WORK_DIR="$(gep2_get_workdir 10)"
+        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_fastqc_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+
         cd "$TEMP_DIR"
+
+        export _JAVA_OPTIONS="-Xmx$(({resources.mem_mb} * 90 / 100))m"
         
         TEMP_SUB="{wildcards.read_type}_Path{wildcards.idx}_{wildcards.base}_{wildcards.read}.fq"
         seqtk sample -s123 {input.reads} 250000 > $TEMP_SUB
@@ -908,8 +835,6 @@ rule B06_fastqc_pe_reads:
         mv "{wildcards.read_type}_Path{wildcards.idx}_{wildcards.base}_{wildcards.read}_fastqc.html" "{output.html}"
         mv "{wildcards.read_type}_Path{wildcards.idx}_{wildcards.base}_{wildcards.read}_fastqc.zip" "{output.zip}"
         
-        cd /
-        rm -rf "$TEMP_DIR"
         """
 
 
@@ -950,8 +875,13 @@ rule B06_fastqc_long_reads:
         
         mkdir -p $(dirname {output.html})
         
-        TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_fastqc_XXXXXX")"
+        WORK_DIR="$(gep2_get_workdir 10)"
+        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_fastqc_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+
         cd "$TEMP_DIR"
+
+        export _JAVA_OPTIONS="-Xmx$(({resources.mem_mb} * 90 / 100))m"
         
         TEMP_SUB="{wildcards.read_type}_Path{wildcards.idx}_{wildcards.base}.fq"
         seqtk sample -s123 {input.reads} 250000 > $TEMP_SUB
@@ -961,8 +891,6 @@ rule B06_fastqc_long_reads:
         mv "{wildcards.read_type}_Path{wildcards.idx}_{wildcards.base}_fastqc.html" "{output.html}"
         mv "{wildcards.read_type}_Path{wildcards.idx}_{wildcards.base}_fastqc.zip" "{output.zip}"
         
-        cd /
-        rm -rf "$TEMP_DIR"
         """
 
 
@@ -997,7 +925,10 @@ rule B07_nanoplot_long_reads:
         
         mkdir -p {output.dir}
         
-        TEMP_DIR="$(mktemp -d "$GEP2_TMP/GEP2_nanoplot_XXXXXX")"
+        WORK_DIR="$(gep2_get_workdir 10)"
+        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_nanoplot_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+
         cd $TEMP_DIR
         
         seqtk sample -s456 {input.reads} 250000 | gzip -c > subsample.fq.gz
@@ -1015,14 +946,12 @@ Read length N50:	0
 EOF
         fi
         
-        cd /
-        rm -rf $TEMP_DIR
         """
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULES - MultiQC Aggregation
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 rule B08_aggregate_read_qc:
     """Aggregate all QC reports with MultiQC."""
