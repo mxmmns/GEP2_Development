@@ -7,11 +7,6 @@ if USE_FASTK:
 else:
     ruleorder: C00_merge_assembly_kmer_db > C00_merge_fastk_db
 
-if USE_FASTK:
-    ruleorder: C00_merge_fastk_db > C00_merge_assembly_kmer_db
-else:
-    ruleorder: C00_merge_assembly_kmer_db > C00_merge_fastk_db
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # INPUT FUNCTIONS
 # -------------------------------------------------------------------------------
@@ -472,6 +467,71 @@ rule C00_convert_hist_to_ascii:
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
             "k{kmer_len}", "{asm_id}.hist"
         )
+    output:
+        hist_ascii = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.hist.txt"
+        )
+    container: CONTAINERS["fastk"]
+    log:
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "logs", "C00_fastk_hist_ascii_k{kmer_len}.log"
+        )
+    shell:
+        """
+        set -euo pipefail
+        exec > {log} 2>&1
+
+        echo "[GEP2] Converting {input.hist_bin} to ASCII for GenomeScopeFK"
+
+        OUTDIR=$(dirname {input.hist_bin})
+        cd "$OUTDIR"
+
+        Histex -G {input.hist_bin} > {output.hist_ascii}
+
+        echo "[GEP2] Conversion complete: {output.hist_ascii}"
+        """
+
+        echo "[GEP2] Starting FastK merge"
+        echo "[GEP2] Input roots:"
+        echo {input.roots}
+
+        OUTDIR=$(dirname {output.ktab})
+        mkdir -p "$OUTDIR"
+
+        WORKDIR=$(mktemp -d)
+        trap 'rm -rf "$WORKDIR"' EXIT
+        cd "$WORKDIR"
+
+        echo "[GEP2] Working directory: $WORKDIR"
+
+        Fastmerge \
+        -t \
+        -h \
+        -T{threads} \
+        -#1 \
+        {wildcards.asm_id} \
+        {input.roots}
+
+        echo "[GEP2] Files after merge:"
+        ls -lah
+
+        shopt -s dotglob
+        mv {wildcards.asm_id}* "$OUTDIR"/
+        mv .{wildcards.asm_id}* "$OUTDIR"/
+        shopt -u dotglob
+
+        echo "[GEP2] Merge complete. Files in $OUTDIR:"
+        ls -lah "$OUTDIR"
+        """
+
+rule C00_convert_hist_to_ascii:
+    """
+    Convert binary FastK .hist to ASCII .hist.txt suitable for GenomeScopeFK
+    """
+    input:
+        hist = get_genomescope_hist
     output:
         hist_ascii = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",

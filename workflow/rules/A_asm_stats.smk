@@ -168,7 +168,7 @@ rule A02_compleasm:
         cp results.tar.gz "{output.archive}"
         
         echo "[GEP2] compleasm completed successfully"
-        '''
+        """
 
 rule A02_busco:
     """Assess assembly completeness with BUSCO"""
