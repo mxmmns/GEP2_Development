@@ -175,8 +175,14 @@ rule A02_busco:
     input:
         asm = get_assembly_input
     output:
-        summary = "{outdir}/{species}/{assembly}/busco/{asm_basename}/{asm_basename}_summary.txt",
-        archive = "{outdir}/{species}/{assembly}/busco/{asm_basename}/{asm_basename}_results.tar.gz"
+        summary = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",
+            "busco", "{asm_basename}", "{asm_basename}_summary.txt"
+        ),
+        archive = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",
+            "busco", "{asm_basename}", "{asm_basename}_results.tar.gz"
+        )
     params:
         outdir = lambda w: os.path.join(w.outdir, w.species, w.assembly, "busco", w.asm_basename),
         lineage = "eukaryota_odb12",
