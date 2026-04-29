@@ -458,13 +458,15 @@ rule C00_merge_fastk_db:
         ls -lah "$OUTDIR"
         """
 
-
 rule C00_convert_hist_to_ascii:
     """
     Convert binary FastK .hist to ASCII .hist.txt suitable for GenomeScopeFK
     """
     input:
-        hist = get_genomescope_hist
+        hist_bin = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "k{kmer_len}", "{asm_id}.hist"
+        )
     output:
         hist_ascii = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
@@ -490,7 +492,6 @@ rule C00_convert_hist_to_ascii:
 
         echo "[GEP2] Conversion complete: {output.hist_ascii}"
         """
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RULES - GenomeScope2 (now at assembly level)
