@@ -262,4 +262,3 @@ rule A02_busco:
 
         echo "[GEP2] BUSCO completed successfully"
         '''
-

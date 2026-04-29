@@ -52,6 +52,8 @@ PREFER_BUSCO: on # under development
 ## or specific lineage name (e.g., eukaryota, primates, insecta, fungi, etc)
 ### get the lineage names here: https://busco-data.ezlab.org/v5/data/lineages/
 LINEAGE: eukaryota
+# Use BUSCO instead COMPLEASM 
+PREFER_BUSCO: on # under development
 
 
 # Read processing ---------------------------------------------------------------------------------
