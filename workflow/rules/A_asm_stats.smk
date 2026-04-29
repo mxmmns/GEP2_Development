@@ -184,7 +184,10 @@ rule A02_busco:
             "busco", "{asm_basename}", "{asm_basename}_results.tar.gz"
         )
     params:
-        outdir = lambda w: os.path.join(w.outdir, w.species, w.assembly, "busco", w.asm_basename),
+        outdir = lambda w: os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", w.species, w.assembly,
+            "busco", w.asm_basename
+        ),
         lineage = "eukaryota_odb12",
         db_dir = BUSCO_DB_DIR
     threads: cpu_func("compleasm")
@@ -193,9 +196,15 @@ rule A02_busco:
         runtime = time_func("compleasm")
     container: CONTAINERS["busco"]
     log:
-        "{outdir}/{species}/{assembly}/logs/A02_busco_{asm_basename}.log"
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",
+            "logs", "A02_busco_{asm_basename}.log"
+        )
     benchmark:
-        "{outdir}/{species}/{assembly}/logs/A02_busco_{asm_basename}_benchmark.txt"
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",
+            "logs", "A02_busco_{asm_basename}_benchmark.txt"
+        )
     shell:
         r'''
         set -euo pipefail
