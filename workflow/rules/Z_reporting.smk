@@ -1,6 +1,6 @@
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # GEP2 - Report Generation Rules
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 # Note: The following are defined in the main Snakefile:
 #   - get_assembly_files(): Get assembly files for species/assembly
@@ -10,9 +10,9 @@
 #   - _as_bool(): Convert config value to boolean
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # INPUT FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 def get_report_gfastats_inputs(wildcards):
     """Get all gfastats output files for this assembly."""
@@ -31,7 +31,9 @@ def get_report_gfastats_inputs(wildcards):
 
 
 def get_report_compleasm_inputs(wildcards):
-    """Get all compleasm output files for this assembly (if enabled)."""
+    """Get all compleasm tar.gz files for this assembly (if enabled).
+    The tar.gz contains {lineage}_odb{version}/full_table.tsv which will
+    be extracted at runtime for --compleasm-full."""
     if not _as_bool(config.get("RUN_COMPL", True)):
         return []
     
@@ -44,7 +46,7 @@ def get_report_compleasm_inputs(wildcards):
             compleasm_files.append(os.path.join(
                 config["OUT_FOLDER"], "GEP2_results", wildcards.species,
                 wildcards.asm_id, "compleasm", asm_basename, 
-                f"{asm_basename}_summary.txt"
+                f"{asm_basename}_results.tar.gz"
             ))
     
     return compleasm_files
@@ -182,6 +184,117 @@ def get_report_hic_inputs(wildcards):
     return results
 
 
+def get_report_hic_snapshots(wildcards):
+    """Get Hi-C snapshot PNGs if available (only when not in high-res mode).
+    
+    Note: These are NOT included as required inputs since PretextSnapshot may fail.
+    The script will check if files exist at runtime.
+    """
+    # Global toggle
+    if not _as_bool(config.get("RUN_HIC", True)):
+        return []
+    
+    # Snapshots are not created in high-res mode
+    if _as_bool(config.get("HIC_HIGH_RES", False)):
+        return []
+    
+    # Per-assembly skip
+    if _should_skip_analysis(wildcards.species, wildcards.asm_id, "hic"):
+        return []
+    
+    # Check for Hi-C reads
+    if not _has_hic_reads_for_assembly(wildcards.species, wildcards.asm_id):
+        return []
+    
+    # Get snapshot PNGs for each assembly file
+    asm_files = get_assembly_files(wildcards.species, wildcards.asm_id)
+    results = []
+    
+    for asm_key, asm_path in sorted(asm_files.items()):
+        if not asm_path or asm_path == "None":
+            continue
+        
+        asm_basename = get_assembly_basename(asm_path)
+        snapshot_path = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", wildcards.species,
+            wildcards.asm_id, "hic", asm_basename,
+            f"{asm_basename}_snapshots", f"{asm_basename}_FullMap.png"
+        )
+        results.append(snapshot_path)
+    
+    return results
+
+
+def get_blobplot_inputs(wildcards):
+    """Get all blobplot files for this assembly (if enabled)."""
+    if not _as_bool(config.get("RUN_BLOB", False)):
+        return []
+    
+    asm_files = get_assembly_files(wildcards.species, wildcards.asm_id)
+    
+    blob_files = []
+    for asm_key, asm_path in sorted(asm_files.items()):
+        if asm_path and asm_path != "None":
+            asm_basename = get_assembly_basename(asm_path)
+            blob_files.append(os.path.join(
+                config["OUT_FOLDER"], "GEP2_results", wildcards.species,
+                wildcards.asm_id, "decontamination", "blobtools", asm_basename, 
+                "blobplots.done"
+            ))
+    
+    return blob_files
+
+def get_blobplot_dirs(wildcards):
+    """Get blobtools output directories for the reporting script."""
+    if not _as_bool(config.get("RUN_BLOB", False)):
+        return []
+    
+    asm_files = get_assembly_files(wildcards.species, wildcards.asm_id)
+    
+    blob_dirs = []
+    for asm_key, asm_path in sorted(asm_files.items()):
+        if asm_path and asm_path != "None":
+            asm_basename = get_assembly_basename(asm_path)
+            blob_dirs.append(os.path.join(
+                config["OUT_FOLDER"], "GEP2_results", wildcards.species,
+                wildcards.asm_id, "decontamination", "blobtools", asm_basename
+            ))
+    
+    return blob_dirs
+
+
+def get_report_fcs_inputs(wildcards):
+    """Get fcs-gx done flag for this assembly (if enabled).
+    The actual report filenames contain an unpredictable taxid,
+    so we depend on the sentinel flag and find files at runtime."""
+    if not _as_bool(config.get("RUN_FCS", False)):
+        return []
+    
+    return [os.path.join(
+        config["OUT_FOLDER"], "GEP2_results", wildcards.species,
+        wildcards.asm_id, "decontamination", "fcs-gx", "fcs_gx.done"
+    )]
+
+
+def get_report_fcs_dirs(wildcards):
+    """Get per-assembly fcs-gx directories for runtime file discovery."""
+    if not _as_bool(config.get("RUN_FCS", False)):
+        return []
+    
+    asm_files = get_assembly_files(wildcards.species, wildcards.asm_id)
+    
+    fcs_dirs = []
+    for asm_key, asm_path in sorted(asm_files.items()):
+        if asm_path and asm_path != "None":
+            asm_basename = get_assembly_basename(asm_path)
+            fcs_dirs.append(os.path.join(
+                config["OUT_FOLDER"], "GEP2_results", wildcards.species,
+                wildcards.asm_id, "decontamination", "fcs-gx", asm_basename
+            ))
+    
+    return fcs_dirs
+
+
 def get_all_report_inputs(wildcards):
     """Collect all inputs for the report rule."""
     inputs = []
@@ -203,12 +316,26 @@ def get_all_report_inputs(wildcards):
     # Inspector if enabled and has long reads
     inputs.extend(get_report_inspector_inputs(wildcards))
     
+    # Hi-C pretext files (but NOT snapshots - those are optional and may not exist)
+    inputs.extend(get_report_hic_inputs(wildcards))
+    
+    # NOTE: Hi-C snapshots are NOT included here as required inputs
+    # because PretextSnapshot can fail. They're passed as params and
+    # checked at runtime in the shell command.
+    
+    # Blobplots if enabled (depends on sentinel .done file)
+    inputs.extend(get_blobplot_inputs(wildcards))
+    
+    # FCS-GX is NOT included here as a required input
+    # because it may not exist. It's passed as params and
+    # checked at runtime in the shell command.
+    
     return inputs
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # RULES
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 
 rule Z00_generate_report:
     """Generate final markdown report aggregating all analysis results."""
@@ -218,10 +345,6 @@ rule Z00_generate_report:
         report = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
             "{asm_id}_report.md"
-        ),
-        pdf = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "{asm_id}_report.pdf"
         )
     params:
         species = lambda w: w.species,
@@ -234,7 +357,11 @@ rule Z00_generate_report:
         merqury_dir = lambda w: os.path.join(
             config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id, "merqury"
         ),
-        script_path = os.path.join(BASEDIR, "scripts", "misc", "make_gep2_report.py")
+        inspector = lambda w: get_report_inspector_inputs(w),
+        hic_snapshots = lambda w: get_report_hic_snapshots(w),
+        blobplots = lambda w: get_blobplot_dirs(w),
+        fcs_gx_dirs = lambda w: get_report_fcs_dirs(w),
+        script_path = str(SCRIPTS_DIR / "make_gep2_report.py")
     container: CONTAINERS["gep2_base"]
     threads: 1
     resources:
@@ -247,10 +374,27 @@ rule Z00_generate_report:
         )
     shell:
         """
+        exec > {log} 2>&1
+        
         cmd="python {params.script_path} -s {params.species} -a {params.asm_id} -g {params.gfastats}"
         
-        if [ -n "{params.compleasm}" ]; then
-            cmd="$cmd -c {params.compleasm}"
+        # Compleasm: extract full_table.tsv from tar.gz files
+        COMPLEASM_FULLS=""
+        COMPLEASM_CLEANUP=""
+        for targz in {params.compleasm}; do
+            if [ -n "$targz" ]; then
+                extract_dir=$(dirname "$targz")
+                tar -xzf "$targz" -C "$extract_dir"
+                full_table=$(find "$extract_dir" -name "full_table.tsv" -path "*_odb*" | head -1)
+                if [ -n "$full_table" ]; then
+                    COMPLEASM_FULLS="$COMPLEASM_FULLS $full_table"
+                    COMPLEASM_CLEANUP="$COMPLEASM_CLEANUP $(dirname "$full_table")"
+                fi
+            fi
+        done
+        
+        if [ -n "$COMPLEASM_FULLS" ]; then
+            cmd="$cmd --compleasm-full $COMPLEASM_FULLS"
         fi
         
         if [ -n "{params.merqury_qv}" ]; then
@@ -269,8 +413,65 @@ rule Z00_generate_report:
             cmd="$cmd --merqury-dir {params.merqury_dir}"
         fi
         
-        cmd="$cmd --also-pdf -o {output.report}"
+        if [ -n "{params.inspector}" ]; then
+            cmd="$cmd --Inspector {params.inspector}"
+        fi
         
-        echo "Command: $cmd" > {log}
-        $cmd >> {log} 2>&1
+        # Hi-C snapshots are optional - only add files that actually exist
+        HIC_SNAPSHOTS=""
+        for snapshot in {params.hic_snapshots}; do
+            if [ -f "$snapshot" ]; then
+                HIC_SNAPSHOTS="$HIC_SNAPSHOTS $snapshot"
+            else
+                echo "[GEP2] Hi-C snapshot not found (skipping): $snapshot"
+            fi
+        done
+        
+        if [ -n "$HIC_SNAPSHOTS" ]; then
+            cmd="$cmd --hic $HIC_SNAPSHOTS"
+        fi
+        
+
+        BLOB_PNGS=""
+        for blobdir in {params.blobplots}; do
+            if [ -d "$blobdir" ]; then
+                # Blob plot: BlobDir.blob.circle.png
+                BLOB_PNG=$(find "$blobdir" -maxdepth 1 -name "*.blob.circle.png" -type f | head -1)
+                if [ -n "$BLOB_PNG" ]; then
+                    BLOB_PNGS="$BLOB_PNGS $BLOB_PNG"
+                fi
+                # Could also grab snail/cumulative here if the script supports them
+            fi
+        done
+
+        if [ -n "$BLOB_PNGS" ]; then
+            cmd="$cmd --blob $BLOB_PNGS"
+        fi
+
+
+        # FCS-GX: find report files at runtime (filenames contain unpredictable taxid)
+        FCS_GX_FILES=""
+        for fcs_dir in {params.fcs_gx_dirs}; do
+            report=$(find "$fcs_dir" -name "*fcs_gx_report.txt" | head -1)
+            if [ -n "$report" ]; then
+                FCS_GX_FILES="$FCS_GX_FILES $report"
+            fi
+        done
+        
+        if [ -n "$FCS_GX_FILES" ]; then
+            cmd="$cmd --fcs-gx $FCS_GX_FILES"
+        fi
+        
+        cmd="$cmd -o {output.report}"
+        
+        echo "[GEP2] Command: $cmd"
+        $cmd
+        
+        # Cleanup extracted compleasm directories
+        for cleanup_dir in $COMPLEASM_CLEANUP; do
+            if [ -d "$cleanup_dir" ]; then
+                rm -rf "$cleanup_dir"
+                echo "[GEP2] Cleaned up extracted compleasm: $cleanup_dir"
+            fi
+        done
         """

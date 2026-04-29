@@ -1,4 +1,4 @@
-# Resource configuration for justATG pipeline
+# Resource configuration for GEP2 pipeline
 # User limits are defined in control_panel.yaml (myCPU, myRAM, myRUN)
 
 # ============================================================================
@@ -63,7 +63,7 @@ resources:
   # Download data
   download_data:
     max_cpu: 2
-    mem_gb: 4
+    mem_gb: 8
     runtime_min: 1080                       # 18h
 
   # Assembly statistics tools
@@ -129,15 +129,52 @@ resources:
   genomescope:
     max_cpu: 1
     mem_gb: 4
-    runtime_min: 60
+    runtime_min: 90
 
-# Long read analysis tools
+  # Long read analysis tools
   inspector:
-    max_cpu: 16
-    mem_gb_per_uncompressed_gb: 1.5
-    base_mem_gb: 32
-    runtime_min_per_uncompressed_gb: 60      # 1h
+    max_cpu: 18
+    mem_gb_per_uncompressed_gb: 0.2
+    base_mem_gb: 24
+    runtime_min_per_uncompressed_gb: 20
     base_runtime_min: 360                    # 6h
+
+  # Hi-C analysis tools
+  chromap_index:
+    max_cpu: 4
+    mem_gb_per_uncompressed_gb: 25.0
+    base_mem_gb: 24
+    runtime_min_per_uncompressed_gb: 10
+    base_runtime_min: 60                    # 1h
+
+  chromap_map:
+    max_cpu: 16
+    mem_gb_per_uncompressed_gb: 0.2
+    base_mem_gb: 24
+    runtime_min_per_uncompressed_gb: 5
+    base_runtime_min: 240                   # 4h
+
+  pretext_map:
+    max_cpu: 4
+    mem_gb_per_uncompressed_gb: 0.3
+    base_mem_gb: 16
+    runtime_min_per_uncompressed_gb: 20
+    base_runtime_min: 120                   # 2h
+
+  # Track generation for Pretext
+  track_light:
+    max_cpu: 2
+    mem_gb_per_uncompressed_gb: 2.0
+    base_mem_gb: 4
+    runtime_min_per_uncompressed_gb: 10
+    base_runtime_min: 60                    # 1h
+
+  track_heavy:
+    max_cpu: 4
+    mem_gb_per_uncompressed_gb: 4.0
+    base_mem_gb: 16
+    runtime_min_per_uncompressed_gb: 30
+    base_runtime_min: 120                   # 2h
 
   # Read mapping tools
   bwa_index:
@@ -169,6 +206,38 @@ resources:
     base_runtime_min: 240                   # 4h
 
 
+  # Decontamination tools
+  fcs_gx:
+    max_cpu: 24
+    mem_gb: 512
+    runtime_min: 2880                       # 48h
+
+  map_reads_blob:
+    max_cpu: 16
+    mem_gb: 32
+    runtime_min: 1440                       # 24h
+
+  build_diamond_db:
+    max_cpu: 8
+    mem_gb: 16
+    runtime_min: 1440                       # 24h
+
+  diamond_blastx:
+    max_cpu: 16
+    base_mem_gb: 20
+    mem_gb_per_uncompressed_gb: 48
+    runtime_min: 2880                       # 48h
+
+  create_blobdir:
+    max_cpu: 4
+    mem_gb: 16
+    runtime_min: 360
+
+  blobplots:
+    max_cpu: 2
+    mem_gb: 4
+    runtime_min: 90
+
   # Lightweight tools
   samtools_index:
     max_cpu: 2
@@ -183,4 +252,4 @@ resources:
   light_task:
     max_cpu: 1
     mem_gb: 1
-    runtime_min: 60
+    runtime_min: 90
