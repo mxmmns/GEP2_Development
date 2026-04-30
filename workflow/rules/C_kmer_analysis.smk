@@ -440,8 +440,12 @@ rule C00_merge_fastk_db:
 
         if [ $(echo {input.roots} | wc -w) -eq 1 ]; then
             echo "[GEP2] Only one input, skipping merge - copying directly"
-            cp {input.roots}.ktab "$OUTDIR"/{wildcards.asm_id}.ktab
-            cp {input.roots}.hist "$OUTDIR"/{wildcards.asm_id}.hist
+            ROOT=$(echo {input.roots} | sed 's/\.ktab$//')
+            cd "$(dirname "$ROOT")"
+            shopt -s dotglob
+            cp "$(basename "$ROOT")"* "$OUTDIR"/
+            cp ."$(basename "$ROOT")"* "$OUTDIR"/
+            shopt -u dotglob
         else
             Fastmerge \
                 -t \
