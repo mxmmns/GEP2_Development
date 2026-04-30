@@ -9,7 +9,7 @@
 DATA_TABLE: "https://docs.google.com/spreadsheets/d/1xmsstJGBo45SEQgCPncE76u51_VN5IDG9sFFafYkGfI/edit?usp=sharing"
 
 # Path where a folder named GEP2_results will be created
-OUT_FOLDER: "/scratch/maxim95/bachelor/gep2_test_results/run06/"
+OUT_FOLDER: "/scratch/maxim95/bachelor/final_runs/run01"
 
 # Per job max resources
 myCPU: 24      # Maximum cores per job (2-24)
@@ -47,13 +47,13 @@ RUN_COMPL: on
 
 # Use BUSCO instead COMPLEASM 
 PREFER_BUSCO: on # under development
+
 # BUSCO lineage to use
 ## Options: "auto" (searches for best matching lineage in addition to eukaryota, but may fail!), 
 ## or specific lineage name (e.g., eukaryota, primates, insecta, fungi, etc)
 ### get the lineage names here: https://busco-data.ezlab.org/v5/data/lineages/
 LINEAGE: eukaryota
-# Use BUSCO instead COMPLEASM 
-PREFER_BUSCO: on # under development
+
 
 
 # Read processing ---------------------------------------------------------------------------------
@@ -110,7 +110,7 @@ SKIP_INSP: off
 # Hi-C analysis -----------------------------------------------------------------------------------
 
 # Run Hi-C analysis (chromap + cooler + pretextmap)
-RUN_HIC: on
+RUN_HIC: off
 
 # Skip Hi-C analysis for assemblies marked with skip=on in the data table
 SKIP_HIC: off
@@ -132,15 +132,15 @@ SNAP_RES: HD
 
 # Pretext tracks (requires RUN_HIC: on)
 ## Gap/N density track (shows assembly gaps)
-GAP_TRACK: on
+GAP_TRACK: off
 ## Long read coverage track (requires long reads, HiFi or ONT)
-COVER_TRACK: on
+COVER_TRACK: off
 ## Low complexity tracks (sdust and longdust)
-REP_TRACK: on
+REP_TRACK: off
 ## Telomere repeat density track
 ### Options: "auto" (auto-detects motif via GoaT/tidk), off (do not add telomere track),
 ### or input the telomere sequence string (e.g. "TTAGGG")
-TELO_TRACK: auto
+TELO_TRACK: off
 
 
 # Contamination analysis --------------------------------------------------------------------------
