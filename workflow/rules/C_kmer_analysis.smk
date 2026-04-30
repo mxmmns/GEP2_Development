@@ -438,12 +438,18 @@ rule C00_merge_fastk_db:
 
         echo "[GEP2] Working directory: $WORKDIR"
 
-        Fastmerge \
-        -t \
-        -h \
-        -T{threads} \
-        {wildcards.asm_id} \
-        {input.roots}
+        if [ $(echo {input.roots} | wc -w) -eq 1 ]; then
+            echo "[GEP2] Only one input, skipping merge - copying directly"
+            cp {input.roots}.ktab "$OUTDIR"/{wildcards.asm_id}.ktab
+            cp {input.roots}.hist "$OUTDIR"/{wildcards.asm_id}.hist
+        else
+            Fastmerge \
+                -t \
+                -h \
+                -T{threads} \
+                {wildcards.asm_id} \
+                {input.roots}
+        fi
 
         echo "[GEP2] Files after merge:"
         ls -lah
