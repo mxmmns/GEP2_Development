@@ -453,15 +453,17 @@ rule C00_merge_fastk_db:
                 -T{threads} \
                 {wildcards.asm_id} \
                 {input.roots}
+
+                echo "[GEP2] Files after merge:"
+                ls -lah
+
+                shopt -s dotglob
+                mv {wildcards.asm_id}* "$OUTDIR"/
+                mv .{wildcards.asm_id}* "$OUTDIR"/
+                shopt -u dotglob 
         fi
 
-        echo "[GEP2] Files after merge:"
-        ls -lah
 
-        shopt -s dotglob
-        mv {wildcards.asm_id}* "$OUTDIR"/
-        mv .{wildcards.asm_id}* "$OUTDIR"/
-        shopt -u dotglob
 
         echo "[GEP2] Merge complete. Files in $OUTDIR:"
         ls -lah "$OUTDIR"
