@@ -7,7 +7,7 @@ if USE_FASTK:
 else:
     ruleorder: C00_merge_assembly_kmer_db > C00_merge_fastk_db
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------------------------------------
 # INPUT FUNCTIONS
 # -------------------------------------------------------------------------------
 
@@ -429,41 +429,43 @@ rule C00_merge_fastk_db:
         echo "[GEP2] Input roots:"
         echo {input.roots}
 
-        OUTDIR=$(dirname {output.ktab})
-        mkdir -p "$OUTDIR"
-
-        WORKDIR=$(mktemp -d)
-        trap 'rm -rf "$WORKDIR"' EXIT
-        cd "$WORKDIR"
+        WORK_DIR="$(gep2_get_workdir 100)"
+        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_merge_kmer_{wildcards.species}_{wildcards.asm_id}_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+        
+        cd "$TEMP_DIR"
 
         echo "[GEP2] Working directory: $WORKDIR"
 
         if [ $(echo {input.roots} | wc -w) -eq 1 ]; then
             echo "[GEP2] Only one input, skipping merge - copying directly"
+
             ROOT=$(echo {input.roots} | sed 's/\\.ktab$//')
-            cd "$(dirname "$ROOT")"
-            shopt -s dotglob
-            cp "$(basename "$ROOT")"* "$OUTDIR"/
-            cp ."$(basename "$ROOT")"* "$OUTDIR"/
-            shopt -u dotglob
+            BASE=$(basename "$ROOT")
+
+            Fastcp $ROOT $TEMP_DIR
+            Fastmv $TEMP_DIR/$BASE $TEMP_DIR/{wildcards.asm_id}
         else
+            echo "[GEP2] More than one input, merging kmer-db's"
+
             Fastmerge \
                 -t \
                 -h \
                 -T{threads} \
+                -P$TEMP_DIR \
                 {wildcards.asm_id} \
                 {input.roots}
 
-                echo "[GEP2] Files after merge:"
-                ls -lah
+            echo "[GEP2] Working directory: $WORKDIR"
+            echo "[GEP2] Files after merge:"
+            ls -lah
 
-                shopt -s dotglob
-                mv {wildcards.asm_id}* "$OUTDIR"/
-                mv .{wildcards.asm_id}* "$OUTDIR"/
-                shopt -u dotglob 
         fi
 
+        OUTDIR=$(dirname {output.ktab})
+        mkdir -p "$OUTDIR"
 
+        Fastmv $TEMP_DIR/{wildcards.asm_id} $OUTDIR/{wildcards.asm_id}
 
         echo "[GEP2] Merge complete. Files in $OUTDIR:"
         ls -lah "$OUTDIR"
