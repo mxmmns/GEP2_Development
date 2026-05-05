@@ -435,7 +435,7 @@ rule C00_merge_fastk_db:
         
         cd "$TEMP_DIR"
 
-        echo "[GEP2] Working directory: $WORKDIR"
+        echo "[GEP2] Working directory: $TEMP_DIR"
 
         if [ $(echo {input.roots} | wc -w) -eq 1 ]; then
             echo "[GEP2] Only one input, skipping merge - copying directly"
