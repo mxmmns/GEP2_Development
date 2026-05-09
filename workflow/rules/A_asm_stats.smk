@@ -194,7 +194,7 @@ rule A02_busco:
     resources:
         mem_mb = mem_func("compleasm"),
         runtime = time_func("compleasm")
-    container: CONTAINERS["busco"]
+    container: CONTAINERS["gep2_base"]
     log:
         os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",

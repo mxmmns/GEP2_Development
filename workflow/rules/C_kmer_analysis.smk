@@ -272,7 +272,7 @@ rule C00_build_per_read_fastk_db:
     resources:
         mem_mb = mem_func("kmer_count"),
         runtime = time_func("kmer_count")
-    container: CONTAINERS["fastk"]
+    container: CONTAINERS["gep2_base"]
     log:
         os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "data", "{species}",
@@ -414,7 +414,7 @@ rule C00_merge_fastk_db:
     resources:
         mem_mb = mem_func("kmer_count"),
         runtime = time_func("kmer_count")
-    container: CONTAINERS["fastk"]
+    container: CONTAINERS["gep2_base"]
     log:
         os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
@@ -485,7 +485,7 @@ rule C00_convert_hist_to_ascii:
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
             "k{kmer_len}", "{asm_id}.hist.txt"
         )
-    container: CONTAINERS["fastk"]
+    container: CONTAINERS["gep2_base"]
     log:
         os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
@@ -540,7 +540,7 @@ rule C01_run_genomescope2:
     resources:
         mem_mb = mem_func("genomescope"),
         runtime = time_func("genomescope")
-    container: CONTAINERS["fastk"] if USE_FASTK else CONTAINERS["gep2_base"]
+    container: CONTAINERS["gep2_base"]
     log:
         os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
@@ -611,7 +611,7 @@ rule C02_run_merqury:
     resources:
         mem_mb = mem_func("merqury"),
         runtime = time_func("merqury")
-    container: CONTAINERS["fastk"] if USE_FASTK else CONTAINERS["gep2_base"]
+    container: CONTAINERS["gep2_base"]
     log:
         os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
