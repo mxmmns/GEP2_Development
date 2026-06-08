@@ -2,7 +2,7 @@
 GEP2_VER = "0.3.3"
 
 # Debug verbosity (set to True for detailed DAG building messages)
-VERBOSE = False
+VERBOSE = True
 # -------------------------------------------------------------------------------
 # IMPORTS
 # -------------------------------------------------------------------------------
