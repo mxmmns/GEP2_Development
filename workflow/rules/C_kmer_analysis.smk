@@ -553,27 +553,28 @@ rule C01_run_genomescope2:
 
         mkdir -p {params.outdir}
 
-        if [ "{params.use_fastk}" = "True" ]; then
-            echo "[GEP2] Running GeneScopeFK for {wildcards.species}/{wildcards.asm_id}"
-            echo "[GEP2] K-mer length: {wildcards.kmer_len}"
+        # TESTING IF GENOMESCOPE2 IS SUFFICIENT
+        # if [ "{params.use_fastk}" = "True" ]; then
+        #     echo "[GEP2] Running GeneScopeFK for {wildcards.species}/{wildcards.asm_id}"
+        #     echo "[GEP2] K-mer length: {wildcards.kmer_len}"
             
-            CMD="Rscript /usr/local/bin/GeneScopeFK.R \
-                -i {input.hist} \
-                -o {params.outdir} \
-                -k {wildcards.kmer_len} \
-                -p {params.ploidy} \
-                -n {wildcards.asm_id}" 
-        else
-            echo "[GEP2] Running GenomeScope2 for {wildcards.species}/{wildcards.asm_id}"
-            echo "[GEP2] K-mer length: {wildcards.kmer_len}"
+        #     CMD="Rscript /usr/local/bin/GeneScopeFK.R \
+        #         -i {input.hist} \
+        #         -o {params.outdir} \
+        #         -k {wildcards.kmer_len} \
+        #         -p {params.ploidy} \
+        #         -n {wildcards.asm_id}" 
+        # else
+        echo "[GEP2] Running GenomeScope2 for {wildcards.species}/{wildcards.asm_id}"
+        echo "[GEP2] K-mer length: {wildcards.kmer_len}"
 
-            CMD="genomescope2 \
-                --input {input.hist} \
-                --output {params.outdir} \
-                --kmer_len {wildcards.kmer_len} \
-                --ploidy {params.ploidy} \
-                --name_prefix {wildcards.asm_id}"
-        fi
+        CMD="genomescope2 \
+            --input {input.hist} \
+            --output {params.outdir} \
+            --kmer_len {wildcards.kmer_len} \
+            --ploidy {params.ploidy} \
+            --name_prefix {wildcards.asm_id}"
+        # fi
     
         echo "[GEP2] Command: $CMD"
         eval $CMD
