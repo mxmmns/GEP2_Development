@@ -608,7 +608,7 @@ rule C02_run_merqury:
             config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id, "merqury"
         ),
         asm_count = get_asm_count,
-        prefix = lambda w: w.asm_id,
+        prefix = lambda w: w.asm_id
     threads: cpu_func("merqury")
     resources:
         mem_mb = mem_func("merqury"),
@@ -715,7 +715,7 @@ rule C02_run_merqury_fk:
                 config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id, "merqury-fk"
             ),
             asm_count = get_asm_count,
-            prefix = lambda w: w.asm_id,
+            prefix = lambda w: w.asm_id
         threads: cpu_func("merqury")
         resources:
             mem_mb = mem_func("merqury"),
