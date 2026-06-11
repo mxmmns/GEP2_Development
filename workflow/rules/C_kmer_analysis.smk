@@ -710,93 +710,93 @@ rule C02_run_merqury_fk:
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
             "merqury_fk", "{asm_id}.completeness.stats"
         )
-        params:
-            outdir = lambda w: os.path.join(
-                config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id, "merqury_fk"
-            ),
-            asm_count = get_asm_count,
-            prefix = lambda w: w.asm_id
-        threads: cpu_func("merqury")
-        resources:
-            mem_mb = mem_func("merqury"),
-            runtime = time_func("merqury")
-        container: CONTAINERS["gep2_base"]
-        log:
-        os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "logs", "C02_merqury_fk.log"
-        )
-        shell:
-        """
-        set -euo pipefail
-        exec > {log} 2>&1
+    params:
+        outdir = lambda w: os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id, "merqury_fk"
+        ),
+        asm_count = get_asm_count,
+        prefix = lambda w: w.asm_id
+    threads: cpu_func("merqury")
+    resources:
+        mem_mb = mem_func("merqury"),
+        runtime = time_func("merqury")
+    container: CONTAINERS["gep2_base"]
+    log:
+    os.path.join(
+        config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+        "logs", "C02_merqury_fk.log"
+    )
+    shell:
+    """
+    set -euo pipefail
+    exec > {log} 2>&1
 
-        mkdir -p {params.outdir}
+    mkdir -p {params.outdir}
 
-        WORK_DIR="$(gep2_get_workdir 50)"
-        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_merqury_fk_{wildcards.species}_{wildcards.asm_id}_XXXXXX")"
-        trap 'rm -rf "$TEMP_DIR"' EXIT
+    WORK_DIR="$(gep2_get_workdir 50)"
+    TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_merqury_fk_{wildcards.species}_{wildcards.asm_id}_XXXXXX")"
+    trap 'rm -rf "$TEMP_DIR"' EXIT
 
-        cd "$TEMP_DIR"
+    cd "$TEMP_DIR"
 
-        echo "[GEP2] Running MerquryFK for {wildcards.species}/{wildcards.asm_id}"
-        echo "[GEP2] K-mer database: {input.kmer_db}"
-        echo "[GEP2] Assembly count: {params.asm_count}"       
+    echo "[GEP2] Running MerquryFK for {wildcards.species}/{wildcards.asm_id}"
+    echo "[GEP2] K-mer database: {input.kmer_db}"
+    echo "[GEP2] Assembly count: {params.asm_count}"       
 
 
-        link_assembly() {{
-            local src="$1"
-            local linkname="$2"
-            local ext=""
-            case "$src" in
-                *.fasta.gz|*.fa.gz|*.fna.gz) ext=".fasta.gz" ;;
-                *.fasta|*.fa|*.fna)          ext=".fasta"    ;;
-                *)                           ext=".fasta"    ;;
-            esac
-            ln -sf "$src" "${{linkname}}${{ext}}"
-            echo "${{linkname}}${{ext}}"
-        }}
+    link_assembly() {{
+        local src="$1"
+        local linkname="$2"
+        local ext=""
+        case "$src" in
+            *.fasta.gz|*.fa.gz|*.fna.gz) ext=".fasta.gz" ;;
+            *.fasta|*.fa|*.fna)          ext=".fasta"    ;;
+            *)                           ext=".fasta"    ;;
+        esac
+        ln -sf "$src" "${{linkname}}${{ext}}"
+        echo "${{linkname}}${{ext}}"
+    }}
 
-        ASM_COUNT={params.asm_count}
-        ASSEMBLIES="{input.assemblies}"
+    ASM_COUNT={params.asm_count}
+    ASSEMBLIES="{input.assemblies}"
 
-        if [ "$ASM_COUNT" -eq 1 ]; then
-            echo "[GEP2] Haploid mode"
-            ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
-            ASM1_LINK=$(link_assembly "$ASM1" "asm1")
+    if [ "$ASM_COUNT" -eq 1 ]; then
+        echo "[GEP2] Haploid mode"
+        ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
+        ASM1_LINK=$(link_assembly "$ASM1" "asm1")
 
-            MerquryFK -T{threads} -P"$TEMP_DIR" {input.kmer_db} "$ASM1_LINK" {params.prefix}
+        MerquryFK -T{threads} -P"$TEMP_DIR" {input.kmer_db} "$ASM1_LINK" {params.prefix}
 
-        elif [ "$ASM_COUNT" -eq 2 ]; then
-            echo "[GEP2] Diploid mode"
-            ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
-            ASM2=$(echo "$ASSEMBLIES" | awk '{{print $2}}')
-            ASM1_LINK=$(link_assembly "$ASM1" "asm1")
-            ASM2_LINK=$(link_assembly "$ASM2" "asm2")
+    elif [ "$ASM_COUNT" -eq 2 ]; then
+        echo "[GEP2] Diploid mode"
+        ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
+        ASM2=$(echo "$ASSEMBLIES" | awk '{{print $2}}')
+        ASM1_LINK=$(link_assembly "$ASM1" "asm1")
+        ASM2_LINK=$(link_assembly "$ASM2" "asm2")
 
-            MerquryFK -T{threads} -P"$TEMP_DIR" {input.kmer_db} "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
+        MerquryFK -T{threads} -P"$TEMP_DIR" {input.kmer_db} "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
 
-        else
-            echo "[GEP2] ERROR: Expected 1 or 2 assembly files, got $ASM_COUNT"
-            exit 1
-        fi
+    else
+        echo "[GEP2] ERROR: Expected 1 or 2 assembly files, got $ASM_COUNT"
+        exit 1
+    fi
 
-        # Move all outputs to the final directory
-        mv {params.prefix}.* {params.outdir}/ 2>/dev/null || true
-        mv *.png *.pdf *.hist *.wig *.bed {params.outdir}/ 2>/dev/null || true
-        mv completeness.stats {params.outdir}/{params.prefix}.completeness.stats 2>/dev/null || true
+    # Move all outputs to the final directory
+    mv {params.prefix}.* {params.outdir}/ 2>/dev/null || true
+    mv *.png *.pdf *.hist *.wig *.bed {params.outdir}/ 2>/dev/null || true
+    mv completeness.stats {params.outdir}/{params.prefix}.completeness.stats 2>/dev/null || true
 
-        if [ ! -f {output.qv} ]; then
-            echo "[GEP2] ERROR: QV file not created"
-            exit 1
-        fi
+    if [ ! -f {output.qv} ]; then
+        echo "[GEP2] ERROR: QV file not created"
+        exit 1
+    fi
 
-        echo "[GEP2] Merqury completed"
-        echo "=== QV Summary ==="
-        cat {output.qv}
-        echo "=== Completeness Summary ==="
-        cat {output.completeness}
-        """
+    echo "[GEP2] Merqury completed"
+    echo "=== QV Summary ==="
+    cat {output.qv}
+    echo "=== Completeness Summary ==="
+    cat {output.completeness}
+    """
 
 # -------------------------------------------------------------------------------
 # RULES - Reads-Only Genome Profiling
