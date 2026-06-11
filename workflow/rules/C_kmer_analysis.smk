@@ -678,7 +678,6 @@ rule C02_run_merqury:
         fi
 
         # Move all outputs to the final directory
-        # merqury.sh writes {prefix}.* and sometimes loose completeness.stats
         mv {params.prefix}.* {params.outdir}/ 2>/dev/null || true
         mv *.png *.pdf *.hist *.wig *.bed {params.outdir}/ 2>/dev/null || true
         mv completeness.stats {params.outdir}/{params.prefix}.completeness.stats 2>/dev/null || true
