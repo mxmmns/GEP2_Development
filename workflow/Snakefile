@@ -1944,8 +1944,9 @@ def get_kmer_stats_results():
             asm_count = len([v for v in asm_files.values() if v and v != "None"])
             mode = "diploid" if asm_count == 2 else "haploid"
             
+            merqury_subdir = "merqury-fk" if use_fastk else "merqury"
             merqury_dir = os.path.join(
-                config["OUT_FOLDER"], "GEP2_results", species, asm_id, "merqury"                
+                config["OUT_FOLDER"], "GEP2_results", species, asm_id, merqury_subdir
             )
             
             expected_files.extend([

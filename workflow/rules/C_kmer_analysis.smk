@@ -4,8 +4,10 @@
 
 if USE_FASTK:
     ruleorder: C00_merge_fastk_db > C00_merge_assembly_kmer_db
+    ruleorder: C02_run_merqury_fk > C02_run_merqury
 else:
     ruleorder: C00_merge_assembly_kmer_db > C00_merge_fastk_db
+    ruleorder: C02_run_merqury > C02_run_merqury_fk
 
 # -------------------------------------------------------------------------------
 # INPUT FUNCTIONS
@@ -588,7 +590,7 @@ rule C01_run_genomescope2:
 # -------------------------------------------------------------------------------
 
 rule C02_run_merqury:
-    """Run Merqury (or MerquryFK for FastK) for assembly QV and completeness analysis."""
+    """Run Merqury for assembly QV and completeness analysis."""
     input:
         kmer_db = get_merqury_db_input,
         assemblies = get_merqury_asm_inputs
@@ -607,7 +609,6 @@ rule C02_run_merqury:
         ),
         asm_count = get_asm_count,
         prefix = lambda w: w.asm_id,
-        use_fastk = USE_FASTK
     threads: cpu_func("merqury")
     resources:
         mem_mb = mem_func("merqury"),
@@ -624,6 +625,7 @@ rule C02_run_merqury:
         exec > {log} 2>&1
         
         export OMP_NUM_THREADS={threads}
+
         mkdir -p {params.outdir}
         
         WORK_DIR="$(gep2_get_workdir 50)"
@@ -632,19 +634,12 @@ rule C02_run_merqury:
 
         cd $TEMP_DIR
         
-        # Tool-Switch: TOOL und DB_ARG setzen
-        if [ '{params.use_fastk}' = 'True' ]; then
-            TOOL="MerquryFK"
-        else
-            TOOL="Merqury"
-            ln -sf {input.kmer_db} read_db.meryl
-            export MERQURY=/opt/conda/share/merqury
-            DB_ARG="read_db.meryl"
-        fi
-
-        echo "[GEP2] Running $TOOL for {wildcards.species}/{wildcards.asm_id}"
+        echo "[GEP2] Running Merqury for {wildcards.species}/{wildcards.asm_id}"
         echo "[GEP2] K-mer database: {input.kmer_db}"
         echo "[GEP2] Assembly count: {params.asm_count}"
+
+        # Merqury needs the Meryl DB in the working directory
+        ln -sf {input.kmer_db} read_db.meryl
 
         link_assembly() {{
             local src="$1"
@@ -663,36 +658,28 @@ rule C02_run_merqury:
         ASSEMBLIES="{input.assemblies}"
 
         if [ $ASM_COUNT -eq 1 ]; then
-            echo "[GEP2] Running $TOOL in HAPLOID mode"
+            echo "[GEP2] Running in HAPLOID mode"
             ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
             ASM1_LINK=$(link_assembly "$ASM1" "asm1")
 
-            if [ '{params.use_fastk}' = 'True' ]; then
-                MerquryFK -T{threads} -P$TEMP_DIR {input.kmer_db} "$ASM1_LINK" {params.prefix}
-            else
-                merqury.sh "$DB_ARG" "$ASM1_LINK" {params.prefix}
-            fi
+            merqury.sh read_db.meryl "$ASM1_LINK" {params.prefix}
 
         elif [ $ASM_COUNT -eq 2 ]; then
-            echo "[GEP2] Running $TOOL in DIPLOID mode"
+            echo "[GEP2] Running in DIPLOID mode"
             ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
             ASM2=$(echo "$ASSEMBLIES" | awk '{{print $2}}')
             ASM1_LINK=$(link_assembly "$ASM1" "asm1")
             ASM2_LINK=$(link_assembly "$ASM2" "asm2")
 
-            if [ '{params.use_fastk}' = 'True' ]; then
-                MerquryFK -T{threads} -P$TEMP_DIR {input.kmer_db} "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
-            else
-                merqury.sh "$DB_ARG" "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
-            fi
+            merqury.sh read_db.meryl "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
 
         else
             echo "[GEP2] ERROR: Expected 1 or 2 assembly files, got $ASM_COUNT"
             exit 1
         fi
 
-        
-        # Ergebnisse ins Output-Verzeichnis verschieben
+        # Move all outputs to the final directory
+        # merqury.sh writes {prefix}.* and sometimes loose completeness.stats
         mv {params.prefix}.* {params.outdir}/ 2>/dev/null || true
         mv *.png *.pdf *.hist *.wig *.bed {params.outdir}/ 2>/dev/null || true
         mv completeness.stats {params.outdir}/{params.prefix}.completeness.stats 2>/dev/null || true
@@ -702,7 +689,109 @@ rule C02_run_merqury:
             exit 1
         fi
 
-        echo "[GEP2] $TOOL completed"
+        echo "[GEP2] Merqury completed"
+        echo "=== QV Summary ==="
+        cat {output.qv}
+        echo "=== Completeness Summary ==="
+        cat {output.completeness}
+        """
+
+rule C02_run_merqury_fk: 
+    """Run MerquryFK (for FastK) for assembly QV and completeness analysis."""
+    input:
+        kmer_db = get_merqury_db_input,
+        assemblies = get_merqury_asm_inputs
+    output:
+        qv = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "merqury-fk", "{asm_id}.qv"
+        ),
+        completeness = os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "merqury-fk", "{asm_id}.completeness.stats"
+        )
+        params:
+            outdir = lambda w: os.path.join(
+                config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id, "merqury-fk"
+            ),
+            asm_count = get_asm_count,
+            prefix = lambda w: w.asm_id,
+        threads: cpu_func("merqury")
+        resources:
+            mem_mb = mem_func("merqury"),
+            runtime = time_func("merqury")
+        container: CONTAINERS["gep2_base"]
+        log:
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "logs", "C02_merqury_fk.log"
+        )
+        shell:
+        """
+        set -euo pipefail
+        exec > {log} 2>&1
+
+        mkdir -p {params.outdir}
+
+        WORK_DIR="$(gep2_get_workdir 50)"
+        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_merqury_fk_{wildcards.species}_{wildcards.asm_id}_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
+
+        cd "$TEMP_DIR"
+
+        echo "[GEP2] Running MerquryFK for {wildcards.species}/{wildcards.asm_id}"
+        echo "[GEP2] K-mer database: {input.kmer_db}"
+        echo "[GEP2] Assembly count: {params.asm_count}"       
+
+
+        link_assembly() {{
+            local src="$1"
+            local linkname="$2"
+            local ext=""
+            case "$src" in
+                *.fasta.gz|*.fa.gz|*.fna.gz) ext=".fasta.gz" ;;
+                *.fasta|*.fa|*.fna)          ext=".fasta"    ;;
+                *)                           ext=".fasta"    ;;
+            esac
+            ln -sf "$src" "${{linkname}}${{ext}}"
+            echo "${{linkname}}${{ext}}"
+        }}
+
+        ASM_COUNT={params.asm_count}
+        ASSEMBLIES="{input.assemblies}"
+
+        if [ "$ASM_COUNT" -eq 1 ]; then
+            echo "[GEP2] Haploid mode"
+            ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
+            ASM1_LINK=$(link_assembly "$ASM1" "asm1")
+
+            MerquryFK -T{threads} -P"$TEMP_DIR" {input.kmer_db} "$ASM1_LINK" {params.prefix}
+
+        elif [ "$ASM_COUNT" -eq 2 ]; then
+            echo "[GEP2] Diploid mode"
+            ASM1=$(echo "$ASSEMBLIES" | awk '{{print $1}}')
+            ASM2=$(echo "$ASSEMBLIES" | awk '{{print $2}}')
+            ASM1_LINK=$(link_assembly "$ASM1" "asm1")
+            ASM2_LINK=$(link_assembly "$ASM2" "asm2")
+
+            MerquryFK -T{threads} -P"$TEMP_DIR" {input.kmer_db} "$ASM1_LINK" "$ASM2_LINK" {params.prefix}
+
+        else
+            echo "[GEP2] ERROR: Expected 1 or 2 assembly files, got $ASM_COUNT"
+            exit 1
+        fi
+
+        # Move all outputs to the final directory
+        mv {params.prefix}.* {params.outdir}/ 2>/dev/null || true
+        mv *.png *.pdf *.hist *.wig *.bed {params.outdir}/ 2>/dev/null || true
+        mv completeness.stats {params.outdir}/{params.prefix}.completeness.stats 2>/dev/null || true
+
+        if [ ! -f {output.qv} ]; then
+            echo "[GEP2] ERROR: QV file not created"
+            exit 1
+        fi
+
+        echo "[GEP2] Merqury completed"
         echo "=== QV Summary ==="
         cat {output.qv}
         echo "=== Completeness Summary ==="
