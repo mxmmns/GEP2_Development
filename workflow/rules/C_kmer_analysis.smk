@@ -322,7 +322,6 @@ rule C00_build_per_read_fastk_db:
         """
     
 
-
 # -------------------------------------------------------------------------------
 # RULES - Assembly-Specific K-mer Database (merge or symlink)
 # -------------------------------------------------------------------------------
@@ -555,7 +554,7 @@ rule C01_run_genomescope2:
 
         mkdir -p {params.outdir}
 
-        # TESTING IF GENOMESCOPE2 IS SUFFICIENT
+        # TESTING IF GENOMESCOPE2 IS SUFFICIENT -> THEN DELETE THIS
         # if [ "{params.use_fastk}" = "True" ]; then
         #     echo "[GEP2] Running GeneScopeFK for {wildcards.species}/{wildcards.asm_id}"
         #     echo "[GEP2] K-mer length: {wildcards.kmer_len}"
