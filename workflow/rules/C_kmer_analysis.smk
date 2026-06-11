@@ -721,10 +721,10 @@ rule C02_run_merqury_fk:
         runtime = time_func("merqury")
     container: CONTAINERS["gep2_base"]
     log:
-    os.path.join(
-        config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-        "logs", "C02_merqury_fk.log"
-    )
+        os.path.join(
+            config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
+            "logs", "C02_merqury_fk.log"
+        )
     shell:
     """
     set -euo pipefail
