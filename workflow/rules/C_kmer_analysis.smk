@@ -704,15 +704,15 @@ rule C02_run_merqury_fk:
     output:
         qv = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "merqury-fk", "{asm_id}.qv"
+            "merqury_fk", "{asm_id}.qv"
         ),
         completeness = os.path.join(
             config["OUT_FOLDER"], "GEP2_results", "{species}", "{asm_id}",
-            "merqury-fk", "{asm_id}.completeness.stats"
+            "merqury_fk", "{asm_id}.completeness.stats"
         )
         params:
             outdir = lambda w: os.path.join(
-                config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id, "merqury-fk"
+                config["OUT_FOLDER"], "GEP2_results", w.species, w.asm_id, "merqury_fk"
             ),
             asm_count = get_asm_count,
             prefix = lambda w: w.asm_id
