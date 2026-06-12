@@ -317,7 +317,8 @@ PREFER_BUSCO = _as_bool(config.get("PREFER_BUSCO", False))
 # ----- FASTK-SWITCH: -----
 KMER_STATS = _as_bool(config.get("KMER_STATS", True))
 USE_FASTK = _as_bool(config.get("USE_FASTK", False))
-
+MERQURY_SUBDIR = "merqury_fk" if USE_FASTK else "merqury"
+    
 # Set up output folder
 out_folder = Path(config["OUT_FOLDER"]) / "GEP2_results"
 out_folder.mkdir(parents=True, exist_ok=True)
@@ -1944,9 +1945,8 @@ def get_kmer_stats_results():
             asm_count = len([v for v in asm_files.values() if v and v != "None"])
             mode = "diploid" if asm_count == 2 else "haploid"
             
-            merqury_subdir = "merqury_fk" if use_fastk else "merqury"
             merqury_dir = os.path.join(
-                config["OUT_FOLDER"], "GEP2_results", species, asm_id, merqury_subdir
+                config["OUT_FOLDER"], "GEP2_results", species, asm_id, MERQURY_SUBDIR
             )
             
             expected_files.extend([
