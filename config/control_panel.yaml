@@ -9,7 +9,7 @@
 DATA_TABLE: "https://docs.google.com/spreadsheets/d/18AjCJE3H3xVF45WUAgeAvpwKcaOrTLk9QXJByOM240I/edit?usp=sharing"
 
 # Path where a folder named GEP2_results will be created
-OUT_FOLDER: "/scratch/maxim95/bachelor/final_runs/run02"
+OUT_FOLDER: "/scratch/maxim95/bachelor/final_runs/run06"
 
 # Per job max resources
 myCPU: 24      # Maximum cores per job (2-24)
@@ -43,7 +43,7 @@ DB_FOLDER: "auto"
 # Gene completeness evaluation --------------------------------------------------------------------
 
 # Run gene completeness analysis
-RUN_COMPL: on
+RUN_COMPL: off
 
 # Use BUSCO instead COMPLEASM 
 PREFER_BUSCO: on # under development
@@ -59,13 +59,13 @@ LINEAGE: eukaryota
 # Read processing ---------------------------------------------------------------------------------
 
 # Process reads (trim/QC). Set to off to skip read processing
-READS_PROC: on
+READS_PROC: off
 
 # Trim short reads (Illumina/10x), set to off to skip trimming
-TRIM_PE: on
+TRIM_PE: off
 
 # Filter HiFi reads, set to off to skip filtering
-FILTER_HIFI: on
+FILTER_HIFI: off
 
 # Correct ONT reads with Hifiasm, set to off to skip correction (caution, may take hours)
 CORRECT_ONT: off
@@ -95,7 +95,7 @@ MERGE_TECH: off
 PLOIDY: 2
 
 # Use FastK instead of Meryl
-USE_FASTK: on # under development
+USE_FASTK: off # under development
 
 
 # Long reads-based analysis -----------------------------------------------------------------------
