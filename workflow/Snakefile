@@ -1,5 +1,7 @@
 # GEP2 - Genome Evaluation Pipeline 2
-GEP2_VER = "0.3.3"
+# by Diego De Panis, 2025
+# note: AI tools may have been used to improve, clean and/or comment this version of the code
+GEP2_VER = "0.4"
 
 # Debug verbosity (set to True for detailed DAG building messages)
 VERBOSE = True
@@ -48,6 +50,7 @@ else:
     DB_FOLDER = _db_folder_raw
 
 BUSCO_DB_DIR = os.path.join(DB_FOLDER, "busco_lineages")
+BUSCO_DOWNLOAD_DIR = os.path.join(DB_FOLDER, "busco_downloads")
 FCS_GX_DIR = os.path.join(DB_FOLDER, "fcs_gx")
 TAXDUMP_DIR = os.path.join(DB_FOLDER, "taxdump")
 UNIPROT_DIR     = os.path.join(DB_FOLDER, "uniprot")
@@ -1748,8 +1751,8 @@ def get_asm_stats_results():
     if not samples_config or "sp_name" not in samples_config:
         return expected_files
     
-    run_compl = RUN_COMPL
-    use_busco = PREFER_BUSCO
+    run_compl = _as_bool(config.get("RUN_COMPL", True))
+    use_busco = _as_bool(config.get("PREFER_BUSCO", False))
     
     for species, species_data in samples_config["sp_name"].items():
         if not species_data or "asm_id" not in species_data:
@@ -1773,7 +1776,7 @@ def get_asm_stats_results():
                 expected_files.append(
                     os.path.join(base_path, "gfastats", f"{asm_basename}_stats.txt")
                 )
-                
+
                 if run_compl:
                     if use_busco:
                         expected_files.extend([
@@ -1786,7 +1789,6 @@ def get_asm_stats_results():
                             os.path.join(base_path, "compleasm", asm_basename, f"{asm_basename}_results.tar.gz")
                         ])
 
-    
     return expected_files
 
 

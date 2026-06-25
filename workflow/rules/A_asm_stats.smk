@@ -42,6 +42,32 @@ rule A00_download_compleasm_db:
         echo "[GEP2] compleasm database download complete"
         """
 
+
+rule A00_download_busco_db:
+    """Download BUSCO eukaryota dataset once (shared, copied into temp per job)."""
+    output:
+        flag = os.path.join(BUSCO_DOWNLOAD_DIR, "eukaryota.done")
+    params:
+        db_dir = BUSCO_DOWNLOAD_DIR
+    threads: cpu_func("download_db")
+    resources:
+        mem_mb = mem_func("download_db"),
+        runtime = time_func("download_db")
+    container: CONTAINERS["busco"]
+    log:
+        os.path.join(BUSCO_DOWNLOAD_DIR, "download_busco_db.log")
+    benchmark:
+        os.path.join(BUSCO_DOWNLOAD_DIR, "download_busco_db_benchmark.txt")
+    shell:
+        """
+        echo "[GEP2] Downloading BUSCO eukaryota dataset to {params.db_dir}"
+        mkdir -p {params.db_dir}
+        busco --download_path {params.db_dir} --download eukaryota_odb12.2 2>&1 | tee {log}
+        touch {output.flag}
+        echo "[GEP2] BUSCO database download complete"
+        """
+
+
 rule A01_gfastats:
     """Calculate assembly statistics with gfastats"""
     input:
@@ -170,104 +196,104 @@ rule A02_compleasm:
         echo "[GEP2] compleasm completed successfully"
         """
 
+
 rule A02_busco:
-    """Assess assembly completeness with BUSCO"""
+    """Assess assembly completeness with BUSCO (euka copied to temp, others downloaded to temp)."""
     input:
-        asm = get_assembly_input
+        asm     = get_assembly_input,
+        db_flag = os.path.join(BUSCO_DOWNLOAD_DIR, "eukaryota.done")
     output:
         summary = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",
+            out_folder, "{species}", "{assembly}",
             "busco", "{asm_basename}", "{asm_basename}_summary.txt"
         ),
         archive = os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",
-            "busco", "{asm_basename}", "{asm_basename}_results.tar.gz"
+            out_folder, "{species}", "{assembly}",
+            "busco",    , "{asm_basename}_results.tar.gz"
         )
     params:
-        outdir = lambda w: os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", w.species, w.assembly,
-            "busco", w.asm_basename
+        outdir       = lambda w: os.path.join(
+            out_folder, w.species, w.assembly, "busco", w.asm_basename
         ),
-        lineage = "eukaryota_odb12",
-        db_dir = BUSCO_DB_DIR
+        shared_db    = BUSCO_DOWNLOAD_DIR,
+        lineage_mode = lambda w: str(config.get("LINEAGE", "auto")).lower()
     threads: cpu_func("compleasm")
     resources:
-        mem_mb = mem_func("compleasm"),
+        mem_mb  = mem_func("compleasm"),
         runtime = time_func("compleasm")
-    container: CONTAINERS["gep2_base"]
+    container: CONTAINERS["busco"]
     log:
         os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",
-            "logs", "A02_busco_{asm_basename}.log"
+            out_folder, "{species}", "{assembly}",
+            "logs", "A02b_busco_{asm_basename}.log"
         )
     benchmark:
         os.path.join(
-            config["OUT_FOLDER"], "GEP2_results", "{species}", "{assembly}",
-            "logs", "A02_busco_{asm_basename}_benchmark.txt"
+            out_folder, "{species}", "{assembly}",
+            "logs", "A02b_busco_{asm_basename}_benchmark.txt"
         )
     shell:
         r'''
         set -euo pipefail
-
-        mkdir -p "{params.outdir}" "$(dirname {log})"
+        mkdir -p "$(dirname {log})" "{params.outdir}"
         exec > "{log}" 2>&1
 
         echo "[GEP2] Running BUSCO on {input.asm}"
+        echo "[GEP2] Lineage setting: {params.lineage_mode}"
 
-        # temp workspace
-        BASE="${{GEP2_TMP:-$TMPDIR}}"
-        mkdir -p "$BASE" 2>/dev/null || BASE="$TMPDIR"
+        WORK_DIR="$(gep2_get_workdir 50)"
+        TEMP_DIR="$(mktemp -d "$WORK_DIR/GEP2_busco_{wildcards.species}_{wildcards.asm_basename}_XXXXXX")"
+        trap 'rm -rf "$TEMP_DIR"' EXIT
 
-        WORKDIR="$(mktemp -d "$BASE/GEP2_busco_{wildcards.species}_{wildcards.asm_basename}_XXXXXX")"
+        # Per-job BUSCO DB: seed with the pre-downloaded euka so the common case needs no
+        # network; any other lineage is downloaded here and dies with TEMP_DIR.
+        DLPATH="$TEMP_DIR/busco_downloads"
+        mkdir -p "$DLPATH"
+        echo "[GEP2] Seeding per-job BUSCO DB from {params.shared_db}"
+        cp -rL "{params.shared_db}"/* "$DLPATH/" 2>/dev/null || true
 
-        cd "$WORKDIR"
+        LINEAGE_MODE="{params.lineage_mode}"
+        if [ "$LINEAGE_MODE" = "auto" ]; then
+            echo "[GEP2] LINEAGE=auto -> --auto-lineage-euk"
+            BUSCO_LINEAGE_ARGS="--auto-lineage-euk"
+        elif [ "${{LINEAGE_MODE%%_odb*}}" = "eukaryota" ]; then
+            EUKA_DIR="$(find "$DLPATH/lineages" -maxdepth 1 -type d -name 'eukaryota_odb*' 2>/dev/null | sort | tail -1)"
+            if [ -n "$EUKA_DIR" ]; then
+                BUSCO_LINEAGE_ARGS="-l $(basename "$EUKA_DIR")"
+            else
+                BUSCO_LINEAGE_ARGS="-l eukaryota"
+            fi
+            echo "[GEP2] Using pre-downloaded eukaryota dataset"
+        else
+            echo "[GEP2] LINEAGE=$LINEAGE_MODE -> downloaded into the per-job temp DB"
+            BUSCO_LINEAGE_ARGS="-l $LINEAGE_MODE"
+        fi
 
-        # Run BUSCO
         busco \
             -i "{input.asm}" \
             -o "{wildcards.asm_basename}" \
             -m genome \
             -c {threads} \
-            --auto-lineage-euk \
-            --out_path "$WORKDIR" \
-            --download_path "{params.db_dir}"
+            --opt-out-run-stats \
+            --skip_bbtools \
+            --download_path "$DLPATH" \
+            --out_path "$TEMP_DIR" \
+            $BUSCO_LINEAGE_ARGS
 
-        echo "[GEP2] BUSCO run finished"
+        RUN_DIR="$TEMP_DIR/{wildcards.asm_basename}"
 
-        RUN_DIR="$WORKDIR/{wildcards.asm_basename}"
-
-        # =========================
-        # HANDLE SUMMARY
-        # =========================
-        SUMMARY_FILE=$(find "$RUN_DIR" -maxdepth 1 -name "short_summary*.txt" | head -1)
-
+        SUMMARY_FILE="$(find "$RUN_DIR" -maxdepth 1 -name 'short_summary.*.txt' | head -1)"
         if [ -n "$SUMMARY_FILE" ]; then
-            mkdir -p "$(dirname {output.summary})"
             cp "$SUMMARY_FILE" "{output.summary}"
         else
-            echo "[GEP2] WARNING: No BUSCO summary found"
+            echo "[GEP2] WARNING: no BUSCO short_summary found" >&2
             touch "{output.summary}"
         fi
 
-        # =========================
-        # ARCHIVE RESULTS
-        # =========================
-        mkdir -p "$(dirname {output.archive})"
-        TB="{output.archive}"
-
         cd "$RUN_DIR"
-
-        tar -czf "$TB" .
-
-        # validate archive
-        gzip -t "$TB"
-        tar -tzf "$TB" >/dev/null
-
-        echo "[GEP2] Archive created: $TB"
-
-        # cleanup
-        cd /
-        rm -rf "$WORKDIR"
+        tar -czf "{output.archive}" --exclude='short_summary.*.txt' .
+        gzip -t "{output.archive}"
+        tar -tzf "{output.archive}" >/dev/null
 
         echo "[GEP2] BUSCO completed successfully"
         '''
